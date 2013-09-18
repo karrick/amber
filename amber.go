@@ -56,7 +56,7 @@ const (
 )
 
 // these variables need to be accessible from within functions that
-// are called by http server library
+// are called by http server library, so making them...global
 
 var (
 	rem        remote
@@ -132,7 +132,7 @@ func mustLookupHeader(h http.Header, name string) (string, error) {
 
 // construct metadata object from URI and Headers
 func request2metadata(r *http.Request) (meta metadata, err error) {
-	// "/resource/contentHash" => { "", "resource", "contentHash", }
+	// "/resource/contentHash" => []string{ "", "resource", "contentHash", }
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) != 3 {
 		err = fmt.Errorf("invalid url: %s", r.URL.Path)
@@ -221,7 +221,7 @@ func writeFile(pathname string, blob []byte) (err error) {
 ////////////////////////////////////////
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: %v [--hostname localhost] [--port 8080] [ server reposDir | download urn pathname pHash | upload pathname ]\n", filepath.Base(os.Args[0]))
+	fmt.Fprintf(os.Stderr, "usage: %v [--hostname localhost] [--port 49154] [ server reposDir | download urn pathname pHash | upload pathname ]\n", filepath.Base(os.Args[0]))
 }
 
 func main() {

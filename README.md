@@ -10,3 +10,46 @@
 // N2Ls() lookup where urn lives, success: 200, returns zero or more urls; failure: 404
 // N2R() lookup where urn lives, success: return resource; 
 
+// UH-OH!  How do I specify user in URN? When given URN, must query N2Ls, but how does it know what to set X-Amber-User to?
+
+// URL:	http://hostport/resource/abc123
+// FS:	     repository/resource/abc123/users/-
+//                               abc123/meta (relevant headers)
+
+// URL:	http://hostport/account/abc123
+// FS:	     repository/account/abc123
+
+// func request2pathname(r *http.Request) (pathname string, err error) {
+// 	switch {
+// 	case !strings.HasPrefix(r.URL.Path, "/resource/"):
+// 		fallthrough
+// 	case isHashInvalid(r.URL.Path[len("/resource/"):]):
+// 		err = fmt.Errorf("illegal url: %s", r.URL.Path)
+// 		return
+// 	}
+
+// 	user, err := mustLookupHeader(r.Header, "X-Amber-User")
+// 	if err != nil {
+// 		user = "-" ; err = nil
+// 	}
+// 	if user != "-" && isHashInvalid(user) {
+// 		err = fmt.Errorf("invalid user: %s", user)
+// 		return
+// 	}
+
+// 	pathname = fmt.Sprintf("%s/users/%s", r.URL.Path[1:], user)
+// 	return
+// }
+
+// TO PREVENT DOS, by default server will not allow upload directly to
+// - user, but require upload to valid user space first, then hardlink
+// to - user provided cred given for account that has that resource.
+// SOME SERVERS may be configured to accept direct upload to - user.
+
+// HEAD + GET Headers:
+//
+// Content-Length: 1234
+// X-Amber-Encryption: aes256
+// X-Amber-Hash: sha1
+// X-Amber-Mode: 644
+
