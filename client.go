@@ -113,7 +113,7 @@ func encrypt(blob []byte, algorithm, key string, iv []byte) ([]byte, error) {
 	case strings.HasPrefix(algorithm, "rc4"):
 		return encryptRC4(blob, key)
 	}
-	return nil, fmt.Errorf("unknown encrpytion algorithm: %s", algorithm)
+	return nil, fmt.Errorf("unknown encryption algorithm: %s", algorithm)
 }
 
 func encryptRC4(blob []byte, key string) ([]byte, error) {
@@ -131,7 +131,7 @@ func encryptRC4(blob []byte, key string) ([]byte, error) {
 		junk[i] = byte(r.Intn(256))
 	}
 	c.XORKeyStream(junk, junk)
-	// actual encrpytion
+	// actual encryption
 	c.XORKeyStream(blob, blob)
 	c.Reset()
 	return blob, nil
@@ -144,7 +144,7 @@ func decrypt(blob []byte, algorithm, key string, iv []byte) ([]byte, error) {
 	case strings.HasPrefix(algorithm, "rc4"):
 		return encryptRC4(blob, key)
 	}
-	return nil, fmt.Errorf("unknown encrpytion algorithm: " + algorithm)
+	return nil, fmt.Errorf("unknown encryption algorithm: " + algorithm)
 }
 
 ////////////////////////////////////////
