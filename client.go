@@ -251,22 +251,22 @@ func commitFile(repositoryRoot, pathname string, meta *metadata) (err error) {
 	return
 }
 
-func commitBytes(repositoryRoot string, bytes []byte, meta *metadata) (err error) {
-	meta.Phash, err = computeHash(meta.hName, bytes)
+func commitBytes(repositoryRoot string, blob []byte, meta *metadata) (err error) {
+	meta.Phash, err = computeHash(meta.hName, blob)
 	if err != nil {
 		return
 	}
 	fname := fmt.Sprintf("%s/pcache/resource/%s", repositoryRoot, meta.Phash)
 	if _, err = os.Stat(fname); os.IsNotExist(err) {
-		if err = writeFile(fname, bytes); err != nil {
+		if err = writeFile(fname, blob); err != nil {
 			return
 		}
 	}
-	iv, err := selectIV(meta.eName, meta.hName, bytes)
+	iv, err := selectIV(meta.eName, meta.hName, blob)
 	if err != nil {
 		return
 	}
-	cipherBytes, err := encrypt(bytes, meta.eName, meta.Phash, iv)
+	cipherBytes, err := encrypt(blob, meta.eName, meta.Phash, iv)
 	if err != nil {
 		return
 	}
@@ -281,7 +281,7 @@ func commitBytes(repositoryRoot string, bytes []byte, meta *metadata) (err error
 			return
 		}
 	}
-	meta.size = fmt.Sprintf("%d", len(bytes))
+	meta.size = fmt.Sprintf("%d", len(blob))
 	return
 }
 

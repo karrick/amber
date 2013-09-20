@@ -8,11 +8,12 @@ import (
 	"flag"
 	"fmt"
 	"hash"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 ////////////////////////////////////////
@@ -183,10 +184,27 @@ func writeFile(pathname string, blob []byte) (err error) {
 	if err = os.MkdirAll(dirname, 0700); err != nil {
 		return
 	}
-	if err = ioutil.WriteFile(pathname, blob, 0600); err != nil {
+	basename := filepath.Base(pathname)
+	tempname := fmt.Sprintf("%s/.%s", dirname, basename)
+
+	perm := os.FileMode(0600)
+	f, err := os.OpenFile(tempname, os.O_WRONLY|os.O_CREATE, perm)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	how := syscall.LOCK_EX | syscall.LOCK_NB
+	if err = syscall.Flock(int(f.Fd()), how); err != nil {
 		return
 	}
-	return
+	n, err := f.Write(blob)
+	if err == nil && n < len(blob) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		return
+	}
+	return os.Rename(tempname, pathname)
 }
 
 ////////////////////////////////////////
