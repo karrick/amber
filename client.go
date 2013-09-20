@@ -210,20 +210,23 @@ func commitDirectory(repositoryRoot, pathname string, meta *metadata) (err error
 			return
 		}
 		for _, name := range names {
-			if name != "." && name != ".." && name != ".git" { // FIXME: .git
+			switch {
+			case name == "." || name == "..":
+			case name == ".amber" || name == ".git":
+			default:
 				childMeta := new(metadata)
 				childMeta.hName = meta.hName
 				childMeta.eName = meta.eName
 				childMeta.uName = meta.uName
-				child := fmt.Sprintf("%s/%s", pathname, name)
-				if err = commitPathname(repositoryRoot, child, childMeta); err != nil {
+				childName := fmt.Sprintf("%s/%s", pathname, name)
+				if err = commitPathname(repositoryRoot, childName, childMeta); err != nil {
 					return
 				}
 				meta.Children = append(meta.Children, *childMeta) // ??? how efficient with large directories ???
 			}
 		}
 	}
-	blob, err := json.Marshal(meta)
+	blob, err := json.Marshal(meta.Children)
 	if err != nil {
 		return
 	}
@@ -268,11 +271,11 @@ func commitBytes(repositoryRoot string, bytes []byte, meta *metadata) (err error
 		return
 	}
 
-	meta.cHash, err = computeHash(meta.hName, cipherBytes)
+	meta.Chash, err = computeHash(meta.hName, cipherBytes)
 	if err != nil {
 		return
 	}
-	fname = fmt.Sprintf("%s/ecache/resource/%s", repositoryRoot, meta.cHash)
+	fname = fmt.Sprintf("%s/ecache/resource/%s", repositoryRoot, meta.Chash)
 	if _, err = os.Stat(fname); os.IsNotExist(err) {
 		if err = writeFile(fname, cipherBytes); err != nil {
 			return
@@ -332,11 +335,11 @@ func upload(pathname string, meta *metadata, client *http.Client, rem *remote) (
 	if err != nil {
 		return
 	}
-	meta.cHash, err = computeHash(meta.hName, cipherBytes)
+	meta.Chash, err = computeHash(meta.hName, cipherBytes)
 	if err != nil {
 		return
 	}
-	url := urlFromRemoteAndResource(rem, meta.cHash)
+	url := urlFromRemoteAndResource(rem, meta.Chash)
 	log.Print("PUT: " + url)
 	reader := bytes.NewReader(cipherBytes)
 	req, err := http.NewRequest("PUT", url, reader)
@@ -363,7 +366,7 @@ func upload(pathname string, meta *metadata, client *http.Client, rem *remote) (
 	return
 }
 
-func resourceFromUrl(url string) (cHash string) {
+func resourceFromUrl(url string) (Chash string) {
 	i := strings.LastIndex(url, "/")
 	if i == -1 {
 		return ""
@@ -411,10 +414,10 @@ func doDownload(rem remote, urn, pathname, pHash string) {
 	}
 }
 
-func downloadResourceFromUrls(urls []string, cHash string) (meta metadata, blob []byte, err error) {
+func downloadResourceFromUrls(urls []string, Chash string) (meta metadata, blob []byte, err error) {
 	var last_err error
 	for _, url := range urls {
-		meta, blob, err = downloadResource(url, cHash)
+		meta, blob, err = downloadResource(url, Chash)
 		if err == nil {
 			return
 		}
@@ -425,14 +428,14 @@ func downloadResourceFromUrls(urls []string, cHash string) (meta metadata, blob 
 	return
 }
 
-func downloadResource(url, cHash string) (meta metadata, blob []byte, err error) {
+func downloadResource(url, Chash string) (meta metadata, blob []byte, err error) {
 	log.Printf("downloadResource: %s", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return
 	}
 	defer resp.Body.Close()
-	meta.cHash = cHash
+	meta.Chash = Chash
 	meta.hName, err = mustLookupHeader(resp.Header, "X-Amber-Hash")
 	if err != nil {
 		return
@@ -446,8 +449,8 @@ func downloadResource(url, cHash string) (meta metadata, blob []byte, err error)
 	if err != nil {
 		return
 	}
-	if _, err = checkHash(meta.hName, blob, meta.cHash); err != nil {
-		if err := sendBadHashNotice(url, cHash); err != nil {
+	if _, err = checkHash(meta.hName, blob, meta.Chash); err != nil {
+		if err := sendBadHashNotice(url, Chash); err != nil {
 			log.Printf(err.Error())
 		}
 		return
@@ -455,7 +458,7 @@ func downloadResource(url, cHash string) (meta metadata, blob []byte, err error)
 	return
 }
 
-func sendBadHashNotice(url, cHash string) (err error) {
+func sendBadHashNotice(url, Chash string) (err error) {
 	// optionally send bad hash message to server. this message
 	// signed by client and sig verified by server to prevent DOS.
 	// SERVER may remove resource if hash invalid, which must be
@@ -526,7 +529,7 @@ func resolveMeta(urn string, rem remote) (meta metadata, err error) {
 		err = fmt.Errorf("cannot find colon: %s", urn)
 		return
 	}
-	meta.cHash = urn[i+1:]
+	meta.Chash = urn[i+1:]
 	return
 }
 

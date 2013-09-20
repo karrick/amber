@@ -34,10 +34,10 @@ type metadata struct {
 	Type     string     // "file" | "directory" | "symlink"
 	Mode     string     // file mode
 	Name     string     // file system name
+	Chash    string     // hash of cipher text (name of resource)
 	Phash    string     // hash of plain text
 	Children []metadata // only used by directories
 
-	cHash     string // hash of cipher text (name of resource)
 	eName     string // name of encryption algorithm
 	hName     string // name of hash algorithm
 	mpathname string // pathname of resource meta file
@@ -71,8 +71,8 @@ var (
 // common
 ////////////////////////////////////////
 
-func urlFromRemoteAndResource(rem *remote, cHash string) (url string) {
-	return fmt.Sprintf("http://%s:%d/resource/%s", rem.hostname, rem.port, cHash)
+func urlFromRemoteAndResource(rem *remote, Chash string) (url string) {
+	return fmt.Sprintf("http://%s:%d/resource/%s", rem.hostname, rem.port, Chash)
 }
 
 func isRuneInvalidForHash(r rune) bool {
@@ -122,8 +122,8 @@ func request2metadata(r *http.Request) (meta metadata, err error) {
 		return
 	}
 
-	meta.cHash = parts[2]
-	if isHashInvalid(meta.cHash) {
+	meta.Chash = parts[2]
+	if isHashInvalid(meta.Chash) {
 		err = fmt.Errorf("invalid url: %s", r.URL.Path)
 		return
 	}

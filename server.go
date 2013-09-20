@@ -214,7 +214,7 @@ func resourceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func resourceGet(meta metadata, w http.ResponseWriter, r *http.Request) {
-	metaPathname := fmt.Sprintf("resource/%s/meta", meta.cHash)
+	metaPathname := fmt.Sprintf("resource/%s/meta", meta.Chash)
 	blob, err := ioutil.ReadFile(metaPathname)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -243,7 +243,7 @@ func resourcePut(meta metadata, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	_, err = checkHash(meta.hName, bytes, meta.cHash)
+	_, err = checkHash(meta.hName, bytes, meta.Chash)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -261,8 +261,8 @@ func resourcePut(meta metadata, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	urn := fmt.Sprintf("urn:%s:resource:%s", nis, meta.cHash)
-	n2l.append(urn, urlFromRemoteAndResource(&rem, meta.cHash))
+	urn := fmt.Sprintf("urn:%s:resource:%s", nis, meta.Chash)
+	n2l.append(urn, urlFromRemoteAndResource(&rem, meta.Chash))
 	fmt.Fprintf(w, "<p>%v bytes written to %v</p>", len(bytes), urn)
 }
 
@@ -299,7 +299,7 @@ func verifySignature(meta metadata, r *http.Request) (err error) {
 	//	return
 	// }
 	// var pub *PublicKey // derived from user string (which may cause URLs to become too long)
-	// hashed := computeHash(req.hName, req.cHash)
+	// hashed := computeHash(req.hName, req.Chash)
 	// if err = rsa.VerifyPKCS1v15(pub, req.hName, hashed, sig); err != nil {
 	//	return fmt.Errorf("unauthorized")
 	// }
