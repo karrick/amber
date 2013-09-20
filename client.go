@@ -306,7 +306,10 @@ func resolveUrls(urn string, rem remote) (urls []string, err error) {
 	}
 	defer resp.Body.Close()
 
-	// check for 303 or other status code?
+	if resp.StatusCode != 200 {
+		err = fmt.Errorf("%s", resp.Status)
+		return
+	}
 
 	bytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
