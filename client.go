@@ -221,27 +221,21 @@ func resourceFromUrl(url string) (cHash string) {
 func doDownload(rem remote, urn, pathname, pHash string) {
 	var meta metadata
 	var err error
-	var resource string
 
 	i := strings.LastIndex(urn, ":")
-	switch {
-	case i == -1:
+	if i == -1 {
 		err = fmt.Errorf("cannot find colon: %v", urn)
 		return
-	default:
-		resource = urn[i+1:]
 	}
+	resource := urn[i+1:]
 
 	urls, err := resolveUrls(urn, rem)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	meta, cipherBytes, err := downloadResourceFromUrls(urls)
+	meta, cipherBytes, err := downloadResourceFromUrls(urls, resource)
 	if err != nil {
-		log.Fatal(err)
-	}
-	if _, err := checkHash(meta.hName, cipherBytes, resource); err != nil {
 		log.Fatal(err)
 	}
 
@@ -262,10 +256,10 @@ func doDownload(rem remote, urn, pathname, pHash string) {
 	}
 }
 
-func downloadResourceFromUrls(urls []string) (meta metadata, blob []byte, err error) {
+func downloadResourceFromUrls(urls []string, cHash string) (meta metadata, blob []byte, err error) {
 	var last_err error
 	for _, url := range urls {
-		meta, blob, err = downloadResource(url)
+		meta, blob, err = downloadResource(url, cHash)
 		if err == nil {
 			return
 		}
@@ -276,24 +270,28 @@ func downloadResourceFromUrls(urls []string) (meta metadata, blob []byte, err er
 	return
 }
 
-func downloadResource(url string) (meta metadata, blob []byte, err error) {
+func downloadResource(url, cHash string) (meta metadata, blob []byte, err error) {
 	log.Printf("downloadResource: %s", url)
 	resp, err := http.Get(url)
 	if err != nil {
 		return
 	}
 	defer resp.Body.Close()
+	meta.cHash = cHash
+	meta.hName, err = mustLookupHeader(resp.Header, "X-Amber-Hash")
+	if err != nil {
+		return
+	}
 	meta.eName, err = mustLookupHeader(resp.Header, "X-Amber-Encryption")
 	if err != nil {
 		meta.eName = "-"
 		err = nil
 	}
-	meta.hName, err = mustLookupHeader(resp.Header, "X-Amber-Hash")
+	blob, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
-	blob, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
+	if _, err = checkHash(meta.hName, blob, meta.cHash); err != nil {
 		return
 	}
 	return
