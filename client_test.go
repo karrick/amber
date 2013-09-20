@@ -2,8 +2,116 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 )
+
+////////////////////////////////////////
+
+func TestRespositoryRootReturnsRootWhenThere(t *testing.T) {
+	// setup
+	pwd, _ := os.Getwd()
+	if err := os.MkdirAll("test/artifacts/.amber", 0700); err != nil {
+		t.Errorf("Error creating artifacts: ", err)
+	}
+	if err := os.Chdir("test/artifacts"); err != nil {
+		t.Errorf("Error changing directory: ", err)
+	}
+	defer os.RemoveAll("test/artifacts")
+	defer os.Chdir(pwd)
+
+	// test
+	actual, err := repositoryRoot()
+	if err != nil {
+		t.Error(err)
+	}
+
+	// verify
+	var expected = filepath.Join(pwd, "test", "artifacts", ".amber")
+	if actual != expected {
+		t.Errorf("Data mismatch:\n   actual: [%s]\n expected: [%s]\n", actual, expected)
+	}
+}
+
+func TestRespositoryRootReturnsRootWhenBelow(t *testing.T) {
+	// setup
+	pwd, _ := os.Getwd()
+	if err := os.MkdirAll("test/artifacts/.amber", 0700); err != nil {
+		t.Errorf("Error creating artifacts: ", err)
+	}
+	if err := os.MkdirAll("test/artifacts/foo/bar", 0700); err != nil {
+		t.Errorf("Error creating artifacts: ", err)
+	}
+	if err := os.Chdir("test/artifacts/foo/bar"); err != nil {
+		t.Errorf("Error changing directory: ", err)
+	}
+	defer os.RemoveAll("test/artifacts")
+	defer os.Chdir(pwd)
+
+	// test
+	actual, err := repositoryRoot()
+	if err != nil {
+		t.Error(err)
+	}
+
+	// verify
+	var expected = filepath.Join(pwd, "test", "artifacts", ".amber")
+	if actual != expected {
+		t.Errorf("Data mismatch:\n   actual: [%s]\n expected: [%s]\n", actual, expected)
+	}
+}
+
+func TestRespositoryRootReturnsErrorWhenDotAmberIsFile(t *testing.T) {
+	// setup
+	pwd, _ := os.Getwd()
+	if err := os.MkdirAll("test/artifacts/foo/bar", 0700); err != nil {
+		t.Errorf("Error creating artifacts: ", err)
+	}
+	if err := ioutil.WriteFile("test/artifacts/.amber", []byte{}, 0600); err != nil {
+		t.Error(err)
+	}
+	if err := os.Chdir("test/artifacts/foo/bar"); err != nil {
+		t.Errorf("Error changing directory: ", err)
+	}
+	defer os.RemoveAll("test/artifacts")
+	defer os.Chdir(pwd)
+
+	// test
+	_, err := repositoryRoot()
+
+	// verify
+	if err == nil {
+		t.Errorf("expected error %v", ErrNoRepos)
+	}
+}
+
+func TestRespositoryRootReturnsErrorWhenNotFound(t *testing.T) {
+	// setup
+	pwd, _ := os.Getwd()
+	if err := os.MkdirAll("test/artifacts/foo/bar", 0700); err != nil {
+		t.Errorf("Error creating artifacts: ", err)
+	}
+	if err := os.Chdir("test/artifacts/foo/bar"); err != nil {
+		t.Errorf("Error changing directory: ", err)
+	}
+	defer os.RemoveAll("test/artifacts")
+	defer os.Chdir(pwd)
+
+	// test
+	repos, err := repositoryRoot()
+
+	// verify
+	if repos != "" {
+		t.Errorf("expected: %v, actual: %v", "", repos)
+	}
+	if err == nil {
+		t.Errorf("expected error %v", ErrNoRepos)
+	}
+}
+
+////////////////////////////////////////
 
 func TestEncryptReturnsErrorWhenUnknownEncryption(t *testing.T) {
 	iv := make([]byte, 10)

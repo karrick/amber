@@ -31,6 +31,12 @@ type remote struct {
 // metadata for a resource stored in amber
 
 type metadata struct {
+	Type     string     // "file" | "directory" | "symlink"
+	Mode     string     // file mode
+	Name     string     // file system name
+	Phash    string     // hash of plain text
+	Children []metadata // only used by directories
+
 	cHash     string // hash of cipher text (name of resource)
 	eName     string // name of encryption algorithm
 	hName     string // name of hash algorithm
@@ -38,8 +44,6 @@ type metadata struct {
 	bpathname string // pathname of resource blob file
 	size      string // string representation of resource size
 	uName     string // user that owns resource, or "-"
-
-	pHash string // hash of plain text
 }
 
 ////////////////////////////////////////
@@ -66,37 +70,6 @@ var (
 ////////////////////////////////////////
 // common
 ////////////////////////////////////////
-
-// Search for and return the repository root
-func repositoryRoot() (repos string, err error) {
-	pwd, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	// start here, work way up until find .amber in pwd
-	repos = pwd
-	for {
-		pathname := fmt.Sprintf("%s%c.amber", repos, filepath.Separator)
-		fi, err := os.Stat(pathname)
-		if err == nil {
-			if fi.IsDir() {
-				repos = pathname
-				break // found it
-			}
-			return "", ErrNoRepos
-		}
-		if !os.IsNotExist(err) {
-			return "", err // some other error
-		}
-		// have not found it yet
-		parent := filepath.Dir(repos)
-		if parent == repos {
-			return "", ErrNoRepos
-		}
-		repos = parent
-	}
-	return repos, nil
-}
 
 func urlFromRemoteAndResource(rem *remote, cHash string) (url string) {
 	return fmt.Sprintf("http://%s:%d/resource/%s", rem.hostname, rem.port, cHash)
@@ -143,7 +116,7 @@ func request2metadata(r *http.Request) (meta metadata, err error) {
 	case parts[1] == "resource":
 		// no-op
 	// case parts[1] == "account":
-	// 	// no-op
+	//	// no-op
 	default:
 		err = fmt.Errorf("invalid url: %s", r.URL.Path)
 		return
@@ -225,6 +198,7 @@ func usage() {
 }
 
 func main() {
+	var err error
 	flag.StringVar(&rem.hostname, "hostname", "localhost", "server hostname")
 	flag.IntVar(&rem.port, "port", 49154, "server port")
 	flag.Parse()
@@ -234,6 +208,7 @@ func main() {
 		os.Exit(2)
 	}
 	cmds := map[string]int{
+		"commit":   2,
 		"server":   2,
 		"download": 4,
 		"upload":   2,
@@ -245,29 +220,34 @@ func main() {
 		os.Exit(2)
 	}
 
-	// TODO: should be loaded from config
-	defaults := &metadata{
-		hName: DefaultHash,
-		eName: DefaultEncryption,
-		uName: "-",
-	}
-
 	// TODO: will want to hold onto longer when doing more than
 	// single upload
 	client := &http.Client{}
 
 	switch {
+	case cmd == "commit":
+		err = commit(flag.Arg(1))
+	case cmd == "download":
+		doDownload(rem, flag.Arg(1), flag.Arg(2), flag.Arg(3))
 	case cmd == "help":
 		usage()
 	case cmd == "server":
 		server(rem.port, flag.Arg(1))
-	case cmd == "download":
-		doDownload(rem, flag.Arg(1), flag.Arg(2), flag.Arg(3))
 	case cmd == "upload":
+		// TODO: deprecated and awaiting removal after doUpload converted
+		defaults := &metadata{
+			hName: DefaultHash,
+			eName: DefaultEncryption,
+			uName: "-",
+		}
 		doUpload(flag.Arg(1), defaults, client, &rem)
 	default:
-		fmt.Println("pardon?")
+		err = fmt.Errorf("pardon?")
 		usage()
+	}
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 }

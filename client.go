@@ -16,55 +16,57 @@ package main
 import (
 	"bytes"
 	"crypto/rc4"
+	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
 const (
+	MAX_DIR_NAMES   = 1000
 	RC4_TRASH_BYTES = 256
 )
 
 ////////////////////////////////////////
-// types
+// repository root
 ////////////////////////////////////////
 
-// client download
-//
-// NOTE: seems like N2R is wasted effort when most resources not
-// served by favorite remove
-//
-// send N2R to favorite remove to resolve
-// if code == 200
-//   done
-// if code == 404
-//   find_and_download(urn)
-
-// func find_and_download(urn)
-//   send N2Ls to favorite remove to resolve
-//   if code == 404
-//     resource does not exist
-//   if code == 303
-//     for _,url := range urls {
-//       send GET to url
-//       if err == nil {
-//         if cHash fails validation {
-//           optionally send bad cHash message to server
-//           this message signed by client and sig ver by server to prevent DOS
-//           SERVER may in remove resource if hash invalid,
-//           which must be protected against DOS attack
-//         }
-//         break
-//       }
-//     }
-//     if content == nill {
-//       still could not find it
-//     }
+func repositoryRoot() (repos string, err error) {
+	pwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	// start here, work way up until find .amber in pwd
+	repos = pwd
+	for {
+		pathname := fmt.Sprintf("%s%c.amber", repos, filepath.Separator)
+		fi, err := os.Stat(pathname)
+		if err == nil {
+			if fi.IsDir() {
+				repos = pathname
+				break // found it
+			}
+			return "", ErrNoRepos
+		}
+		if !os.IsNotExist(err) {
+			return "", err // some other error
+		}
+		// have not found it yet
+		parent := filepath.Dir(repos)
+		if parent == repos {
+			return "", ErrNoRepos
+		}
+		repos = parent
+	}
+	return repos, nil
+}
 
 ////////////////////////////////////////
 // encryption / decryption
@@ -102,14 +104,14 @@ func encrypt(blob []byte, algorithm, key string, iv []byte) ([]byte, error) {
 	case algorithm == "-":
 		return blob, nil
 		// case strings.HasPrefix(algorithm, "aes"):
-		// 	// FIXME: key must be 16, 24, or 32 bytes for AES-128, -192, or -256
-		// 	c,err = aes.NewCipher([]byte(key))
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-		// 	eblob = make([]byte, len(blob)) // padding?
-		// 	// TODO
-		// 	return eblob, nil
+		//	// FIXME: key must be 16, 24, or 32 bytes for AES-128, -192, or -256
+		//	c,err = aes.NewCipher([]byte(key))
+		//	if err != nil {
+		//		return nil, err
+		//	}
+		//	eblob = make([]byte, len(blob)) // padding?
+		//	// TODO
+		//	return eblob, nil
 	case strings.HasPrefix(algorithm, "rc4"):
 		return encryptRC4(blob, key)
 	}
@@ -117,15 +119,16 @@ func encrypt(blob []byte, algorithm, key string, iv []byte) ([]byte, error) {
 }
 
 func encryptRC4(blob []byte, key string) ([]byte, error) {
-	// key must be between 1 and 256 bytes
-	rc4Key := make([]byte, 256) // ???
-	copy(rc4Key, []byte(key))   // ???
+	// TODO: assert key is between 1 and 256 bytes
+	rc4Key := make([]byte, 256)
+	copy(rc4Key, []byte(key))
 	c, err := rc4.NewCipher(rc4Key)
 	if err != nil {
 		return nil, err
 	}
 	// throw away at least 256 bytes of data
 	junk := make([]byte, RC4_TRASH_BYTES)
+	// ??? how does decryption work with below reseeding
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := 0; i < len(junk); i++ {
 		junk[i] = byte(r.Intn(256))
@@ -148,6 +151,156 @@ func decrypt(blob []byte, algorithm, key string, iv []byte) ([]byte, error) {
 }
 
 ////////////////////////////////////////
+// commit
+//
+// directory loaded into cache (pcache, then encrypted into ecache)
+// new tip created
+////////////////////////////////////////
+
+func commit(pathname string) (err error) {
+	root, err := repositoryRoot()
+	if err != nil {
+		return
+	}
+	meta := new(metadata)
+	// TODO: should be loaded from config
+	meta.hName = DefaultHash
+	meta.eName = DefaultEncryption
+	meta.uName = "-"
+	return commitPathname(root, pathname, meta)
+}
+
+func commitPathname(repositoryRoot, pathname string, meta *metadata) (err error) {
+	// log.Println("COMMIT PATHNAME:", pathname)
+	fi, err := os.Stat(pathname)
+	if err != nil {
+		return
+	}
+	mode := fi.Mode()
+	meta.Mode = fmt.Sprintf("0%o", mode)
+	meta.Name = fi.Name()
+	switch {
+	case mode&os.ModeDir != 0:
+		err = commitDirectory(repositoryRoot, pathname, meta)
+	case mode&os.ModeSymlink != 0:
+		err = fmt.Errorf("TODO: implement commitSymlink")
+	default:
+		err = commitFile(repositoryRoot, pathname, meta)
+	}
+	return
+}
+
+func commitDirectory(repositoryRoot, pathname string, meta *metadata) (err error) {
+	log.Println("COMMIT DIRECTORY:", pathname)
+	meta.Type = "directory"
+	fh, err := os.Open(pathname)
+	if err != nil {
+		return
+	}
+	defer fh.Close()
+
+	meta.Children = make([]metadata, 0, MAX_DIR_NAMES)
+	for {
+		var names []string
+		names, err = fh.Readdirnames(MAX_DIR_NAMES)
+		if err != nil {
+			if err == io.EOF {
+				break // done
+			}
+			return
+		}
+		for _, name := range names {
+			if name != "." && name != ".." && name != ".git" { // FIXME: .git
+				childMeta := new(metadata)
+				childMeta.hName = meta.hName
+				childMeta.eName = meta.eName
+				childMeta.uName = meta.uName
+				child := fmt.Sprintf("%s/%s", pathname, name)
+				if err = commitPathname(repositoryRoot, child, childMeta); err != nil {
+					return
+				}
+				meta.Children = append(meta.Children, *childMeta) // ??? how efficient with large directories ???
+			}
+		}
+	}
+	blob, err := json.Marshal(meta)
+	if err != nil {
+		return
+	}
+	if err = commitBytes(repositoryRoot, blob, meta); err != nil {
+		return
+	}
+	// once directory committed, do not want to propagate Children up
+	meta.Children = nil
+	return
+}
+
+func commitFile(repositoryRoot, pathname string, meta *metadata) (err error) {
+	log.Println("COMMIT FILE:", pathname)
+	meta.Type = "file"
+	plainBytes, err := ioutil.ReadFile(pathname)
+	if err != nil {
+		return
+	}
+	if err = commitBytes(repositoryRoot, plainBytes, meta); err != nil {
+		return
+	}
+	return
+}
+
+func commitBytes(repositoryRoot string, bytes []byte, meta *metadata) (err error) {
+	meta.Phash, err = computeHash(meta.hName, bytes)
+	if err != nil {
+		return
+	}
+	fname := fmt.Sprintf("%s/pcache/resource/%s", repositoryRoot, meta.Phash)
+	if _, err = os.Stat(fname); os.IsNotExist(err) {
+		if err = writeFile(fname, bytes); err != nil {
+			return
+		}
+	}
+	iv, err := selectIV(meta.eName, meta.hName, bytes)
+	if err != nil {
+		return
+	}
+	cipherBytes, err := encrypt(bytes, meta.eName, meta.Phash, iv)
+	if err != nil {
+		return
+	}
+
+	meta.cHash, err = computeHash(meta.hName, cipherBytes)
+	if err != nil {
+		return
+	}
+	fname = fmt.Sprintf("%s/ecache/resource/%s", repositoryRoot, meta.cHash)
+	if _, err = os.Stat(fname); os.IsNotExist(err) {
+		if err = writeFile(fname, cipherBytes); err != nil {
+			return
+		}
+	}
+	meta.size = fmt.Sprintf("%d", len(bytes))
+	return
+}
+
+////////////////////////////////////////
+// push
+//
+// all resources not on remote is copied to remote
+////////////////////////////////////////
+
+////////////////////////////////////////
+// pull
+//
+// all remote resources not on localhost is copied to localhost
+////////////////////////////////////////
+
+////////////////////////////////////////
+// update
+//
+// tip of cached data copied to directory (brute overwrite of directory data)
+////////////////////////////////////////
+
+////////////////////////////////////////
 // upload / download
 ////////////////////////////////////////
 
@@ -167,7 +320,7 @@ func upload(pathname string, meta *metadata, client *http.Client, rem *remote) (
 	if err != nil {
 		return
 	}
-	meta.pHash, err = computeHash(meta.hName, plainBytes)
+	meta.Phash, err = computeHash(meta.hName, plainBytes)
 	if err != nil {
 		return
 	}
@@ -175,7 +328,7 @@ func upload(pathname string, meta *metadata, client *http.Client, rem *remote) (
 	if err != nil {
 		return
 	}
-	cipherBytes, err := encrypt(plainBytes, meta.eName, meta.pHash, iv)
+	cipherBytes, err := encrypt(plainBytes, meta.eName, meta.Phash, iv)
 	if err != nil {
 		return
 	}
@@ -205,7 +358,7 @@ func upload(pathname string, meta *metadata, client *http.Client, rem *remote) (
 	if err != nil {
 		return
 	}
-	log.Printf("pHash: %s\n", meta.pHash)
+	log.Printf("pHash: %s\n", meta.Phash)
 	log.Printf("upload response:\n%v", string(out))
 	return
 }
@@ -218,6 +371,8 @@ func resourceFromUrl(url string) (cHash string) {
 	return url[i+1:]
 }
 
+// TODO: return proper error or refactor so failure to download a
+// resource doesn't kill program
 func doDownload(rem remote, urn, pathname, pHash string) {
 	var meta metadata
 	var err error
@@ -292,8 +447,19 @@ func downloadResource(url, cHash string) (meta metadata, blob []byte, err error)
 		return
 	}
 	if _, err = checkHash(meta.hName, blob, meta.cHash); err != nil {
+		if err := sendBadHashNotice(url, cHash); err != nil {
+			log.Printf(err.Error())
+		}
 		return
 	}
+	return
+}
+
+func sendBadHashNotice(url, cHash string) (err error) {
+	// optionally send bad hash message to server. this message
+	// signed by client and sig verified by server to prevent DOS.
+	// SERVER may remove resource if hash invalid, which must be
+	// protected against DOS attack.
 	return
 }
 
