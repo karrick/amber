@@ -245,13 +245,11 @@ func commitFile(repositoryRoot, pathname string, meta *metadata) (err error) {
 	if err != nil {
 		return
 	}
-	if err = commitBytes(repositoryRoot, plainBytes, meta); err != nil {
-		return
-	}
-	return
+	return commitBytes(repositoryRoot, plainBytes, meta)
 }
 
 func commitBytes(repositoryRoot string, blob []byte, meta *metadata) (err error) {
+	meta.size = fmt.Sprintf("%d", len(blob))
 	meta.Phash, err = computeHash(meta.hName, blob)
 	if err != nil {
 		return
@@ -281,7 +279,6 @@ func commitBytes(repositoryRoot string, blob []byte, meta *metadata) (err error)
 			return
 		}
 	}
-	meta.size = fmt.Sprintf("%d", len(blob))
 	return
 }
 
