@@ -134,25 +134,25 @@ func TestParseUriList(t *testing.T) {
 }
 
 type parseUrcCase struct {
-	name		string
-	blob		[]byte
-	output		metadata
-	err			error
+	name   string
+	blob   []byte
+	output metadata
+	err    error
 }
 
 func TestParseUrcCatchesErrors(t *testing.T) {
 	cases := []parseUrcCase{
 		{
-			name:	"three fields",
-			blob:	[]byte("one two three"),
-			output:	metadata{},
-			err:	fmt.Errorf("invalid line format: one two three"),
+			name:   "three fields",
+			blob:   []byte("one two three"),
+			output: metadata{},
+			err:    fmt.Errorf("invalid line format: one two three"),
 		},
 		{
-			name:	"splits on crlf",
-			blob:	[]byte("X-Amber-Hash: foo\nX-Amber-Encryption: bar\n"),
-			output:	metadata{},
-			err:	errors.New("invalid line format: X-Amber-Hash: foo\nX-Amber-Encryption: bar\n"),
+			name:   "splits on crlf",
+			blob:   []byte("X-Amber-Hash: foo\nX-Amber-Encryption: bar\n"),
+			output: metadata{},
+			err:    errors.New("invalid line format: X-Amber-Hash: foo\nX-Amber-Encryption: bar\n"),
 		},
 	}
 	for _, item := range cases {
@@ -169,28 +169,28 @@ func TestParseUrcCatchesErrors(t *testing.T) {
 func TestParseUrcExpectedResults(t *testing.T) {
 	cases := []parseUrcCase{
 		{
-			name:	"gets hash name",
-			blob:	[]byte("X-Amber-Hash: foo"),
-			output:	metadata{hName: "foo"},
-			err:	nil,
+			name:   "gets hash name",
+			blob:   []byte("X-Amber-Hash: foo"),
+			output: metadata{hName: "foo"},
+			err:    nil,
 		},
 		{
-			name:	"gets encryption name",
-			blob:	[]byte("X-Amber-Encryption: bar"),
-			output:	metadata{eName: "bar"},
-			err:	nil,
+			name:   "gets encryption name",
+			blob:   []byte("X-Amber-Encryption: bar"),
+			output: metadata{eName: "bar"},
+			err:    nil,
 		},
 		{
-			name:	"gets hash and encryption name",
-			blob:	[]byte("X-Amber-Hash: foo\r\nX-Amber-Encryption: bar\r\n"),
-			output:	metadata{hName: "foo", eName: "bar"},
-			err:	nil,
+			name:   "gets hash and encryption name",
+			blob:   []byte("X-Amber-Hash: foo\r\nX-Amber-Encryption: bar\r\n"),
+			output: metadata{hName: "foo", eName: "bar"},
+			err:    nil,
 		},
 		{
-			name:	"stops at empty line",
-			blob:	[]byte("X-Amber-Hash: foo\r\n\r\nX-Amber-Encryption: bar\r\n"),
-			output:	metadata{hName: "foo"},
-			err:	nil,
+			name:   "stops at empty line",
+			blob:   []byte("X-Amber-Hash: foo\r\n\r\nX-Amber-Encryption: bar\r\n"),
+			output: metadata{hName: "foo"},
+			err:    nil,
 		},
 	}
 	for _, item := range cases {

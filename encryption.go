@@ -83,18 +83,14 @@ func newPrimedRC4Cipher(key []byte) (c *rc4.Cipher, err error) {
 	if err != nil {
 		return
 	}
-	primeRC4(c)
-	return
-}
-
-// primeRC4 encrypts random blob of data to throw away
-func primeRC4(c *rc4.Cipher) {
+	// primeRC4 encrypts random blob of data to throw away
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	junk := make([]byte, RC4_TRASH_BYTES)
 	for i := 0; i < len(junk); i++ {
 		junk[i] = byte(r.Intn(256))
 	}
 	c.XORKeyStream(junk, junk)
+	return
 }
 
 func decrypt(blob []byte, algorithm, key string, iv []byte) ([]byte, error) {

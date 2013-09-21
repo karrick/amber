@@ -5,58 +5,6 @@ import (
 	"testing"
 )
 
-func TestEncryptReturnsErrorWhenUnknownEncryption(t *testing.T) {
-	iv := make([]byte, 10)
-	actual, err := encrypt(make([]byte, 10), "non-existant-algorithm", "some key", iv)
-	if actual != nil {
-		t.Errorf("expected: %v, actual: %v", nil, actual)
-	}
-	if err == nil {
-		t.Errorf("expected: %v, actual: %v", fmt.Errorf("unknown encryption algorithm: non-existant-algorithm"), err)
-	}
-}
-
-func TestEncryptReturnsEncryptionStringOfBytes(t *testing.T) {
-	bytes := []byte("just some blob of data")
-	iv := make([]byte, 10)
-	actual, err := encrypt(bytes, "-", "some key", iv)
-	expected := "just some blob of data"
-	if string(actual) != expected {
-		t.Errorf("expected: %v, actual: %v", expected, string(actual))
-	}
-	if err != nil {
-		t.Errorf("expected: %v, actual: %v", nil, err)
-	}
-}
-
-////////////////////////////////////////
-
-func TestDecryptReturnsErrorWhenUnknownDecryption(t *testing.T) {
-	iv := make([]byte, 10)
-	actual, err := decrypt(make([]byte, 10), "non-existant-decryption", "some key", iv)
-	if actual != nil {
-		t.Errorf("expected: %v, actual: %v", nil, actual)
-	}
-	if err == nil {
-		t.Errorf("expected: %v, actual: %v", fmt.Errorf("unknown decryption algorithm: non-existant-algorithm"), err)
-	}
-}
-
-func TestDecryptReturnsDecryptionStringOfBytes(t *testing.T) {
-	bytes := []byte("just some blob of data")
-	iv := make([]byte, 10)
-	actual, err := decrypt(bytes, "-", "some key", iv)
-	expected := "just some blob of data"
-	if string(actual) != expected {
-		t.Errorf("expected: %v, actual: %v", expected, string(actual))
-	}
-	if err != nil {
-		t.Errorf("expected: %v, actual: %v", nil, err)
-	}
-}
-
-////////////////////////////////////////
-
 func TestSelectIVInvalidHashName(t *testing.T) {
 	plaintext := []byte("this is a test")
 	_, actual := selectIV("aes128", "sha", plaintext)
@@ -140,3 +88,54 @@ func TestSelectIV(t *testing.T) {
 	}
 }
 
+////////////////////////////////////////
+
+func TestEncryptReturnsErrorWhenUnknownEncryption(t *testing.T) {
+	iv := make([]byte, 10)
+	actual, err := encrypt(make([]byte, 10), "non-existant-algorithm", "some key", iv)
+	if actual != nil {
+		t.Errorf("expected: %v, actual: %v", nil, actual)
+	}
+	if err == nil {
+		t.Errorf("expected: %v, actual: %v", fmt.Errorf("unknown encryption algorithm: non-existant-algorithm"), err)
+	}
+}
+
+func TestEncryptReturnsEncryptionStringOfBytes(t *testing.T) {
+	bytes := []byte("just some blob of data")
+	iv := make([]byte, 10)
+	actual, err := encrypt(bytes, "-", "some key", iv)
+	expected := "just some blob of data"
+	if string(actual) != expected {
+		t.Errorf("expected: %v, actual: %v", expected, string(actual))
+	}
+	if err != nil {
+		t.Errorf("expected: %v, actual: %v", nil, err)
+	}
+}
+
+////////////////////////////////////////
+
+func TestDecryptReturnsErrorWhenUnknownDecryption(t *testing.T) {
+	iv := make([]byte, 10)
+	actual, err := decrypt(make([]byte, 10), "non-existant-decryption", "some key", iv)
+	if actual != nil {
+		t.Errorf("expected: %v, actual: %v", nil, actual)
+	}
+	if err == nil {
+		t.Errorf("expected: %v, actual: %v", fmt.Errorf("unknown decryption algorithm: non-existant-algorithm"), err)
+	}
+}
+
+func TestDecryptReturnsDecryptionStringOfBytes(t *testing.T) {
+	bytes := []byte("just some blob of data")
+	iv := make([]byte, 10)
+	actual, err := decrypt(bytes, "-", "some key", iv)
+	expected := "just some blob of data"
+	if string(actual) != expected {
+		t.Errorf("expected: %v, actual: %v", expected, string(actual))
+	}
+	if err != nil {
+		t.Errorf("expected: %v, actual: %v", nil, err)
+	}
+}

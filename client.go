@@ -79,7 +79,6 @@ func commit(pathname string) (err error) {
 }
 
 func commitPathname(repositoryRoot, pathname string, meta *metadata) (err error) {
-	// log.Println("COMMIT PATHNAME:", pathname)
 	fi, err := os.Stat(pathname)
 	if err != nil {
 		return
