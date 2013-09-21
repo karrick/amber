@@ -177,7 +177,7 @@ func commitPathname(repositoryRoot, pathname string, meta *metadata) (err error)
 		return
 	}
 	mode := fi.Mode()
-	meta.Mode = fmt.Sprintf("0%o", mode)
+	meta.Mode = fmt.Sprintf("%o", mode)
 	meta.Name = fi.Name()
 	switch {
 	case mode&os.ModeDir != 0:
@@ -205,6 +205,7 @@ func commitDirectory(repositoryRoot, pathname string, meta *metadata) (err error
 		names, err = fh.Readdirnames(MAX_DIR_NAMES)
 		if err != nil {
 			if err == io.EOF {
+				// err = nil // ignored by overwrite
 				break // done
 			}
 			return
@@ -541,14 +542,12 @@ func parseUrc(blob []byte) (meta metadata, err error) {
 			err = fmt.Errorf("invalid line format: %s", line)
 			return
 		}
-		// trim colon from right side of key string
-		key := fields[0][:len(fields[0])-1]
 		switch {
-		case key == "X-Amber-Hash":
+		case fields[0] == "X-Amber-Hash:":
 			meta.hName = fields[1]
-		case key == "X-Amber-Encryption":
+		case fields[0] == "X-Amber-Encryption:":
 			meta.eName = fields[1]
-		case key == "Content-Length":
+		case fields[0] == "Content-Length:":
 			meta.size = fields[1]
 		}
 	}

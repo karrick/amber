@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -263,6 +264,77 @@ func TestParseUriList(t *testing.T) {
 	for i, _ := range expected {
 		if expected[i] != actual[i] {
 			t.Errorf("expected: %v, actual: %v", expected[i], actual[i])
+		}
+	}
+}
+
+type parseUrcCase struct {
+	name		string
+	blob		[]byte
+	output		metadata
+	err			error
+}
+
+func TestParseUrcCatchesErrors(t *testing.T) {
+	cases := []parseUrcCase{
+		{
+			name:	"three fields",
+			blob:	[]byte("one two three"),
+			output:	metadata{},
+			err:	fmt.Errorf("invalid line format: one two three"),
+		},
+		{
+			name:	"splits on crlf",
+			blob:	[]byte("X-Amber-Hash: foo\nX-Amber-Encryption: bar\n"),
+			output:	metadata{},
+			err:	errors.New("invalid line format: X-Amber-Hash: foo\nX-Amber-Encryption: bar\n"),
+		},
+	}
+	for _, item := range cases {
+		output, err := parseUrc(item.blob)
+		if item.err.Error() != err.Error() {
+			t.Errorf("Case: %v; Expected error: %v; Acutal error: %v\n", item.name, item.err.Error(), err.Error())
+		}
+		if fmt.Sprintf("%#v", item.output) != fmt.Sprintf("%#v", output) {
+			t.Errorf("Case: %v; Expected: %#v; Acutal: %#v\n", item.name, item.output, output)
+		}
+	}
+}
+
+func TestParseUrcExpectedResults(t *testing.T) {
+	cases := []parseUrcCase{
+		{
+			name:	"gets hash name",
+			blob:	[]byte("X-Amber-Hash: foo"),
+			output:	metadata{hName: "foo"},
+			err:	nil,
+		},
+		{
+			name:	"gets encryption name",
+			blob:	[]byte("X-Amber-Encryption: bar"),
+			output:	metadata{eName: "bar"},
+			err:	nil,
+		},
+		{
+			name:	"gets hash and encryption name",
+			blob:	[]byte("X-Amber-Hash: foo\r\nX-Amber-Encryption: bar\r\n"),
+			output:	metadata{hName: "foo", eName: "bar"},
+			err:	nil,
+		},
+		{
+			name:	"stops at empty line",
+			blob:	[]byte("X-Amber-Hash: foo\r\n\r\nX-Amber-Encryption: bar\r\n"),
+			output:	metadata{hName: "foo"},
+			err:	nil,
+		},
+	}
+	for _, item := range cases {
+		output, err := parseUrc(item.blob)
+		if err != nil {
+			t.Errorf("Case: %v; Didn't expect error: %v\n", item.name, err.Error())
+		}
+		if fmt.Sprintf("%#v", item.output) != fmt.Sprintf("%#v", output) {
+			t.Errorf("Case: %v; Expected: %#v; Acutal: %#v\n", item.name, item.output, output)
 		}
 	}
 }
