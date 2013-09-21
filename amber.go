@@ -246,11 +246,11 @@ func main() {
 	case cmd == "commit":
 		err = commit(flag.Arg(1))
 	case cmd == "download":
-		doDownload(rem, flag.Arg(1), flag.Arg(2), flag.Arg(3))
+		err = doDownload(rem, flag.Arg(1), flag.Arg(2), flag.Arg(3))
 	case cmd == "help":
 		usage()
 	case cmd == "server":
-		server(rem.port, flag.Arg(1))
+		server(rem, flag.Arg(1))
 	case cmd == "upload":
 		// TODO: deprecated and awaiting removal after doUpload converted
 		defaults := &metadata{

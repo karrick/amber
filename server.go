@@ -26,22 +26,26 @@ var n2l *lockUrnDb
 
 ////////////////////////////////////////
 
-func server(port int, repos string) {
+func server(rem remote, repos string) {
 	pwd, _ := os.Getwd()
 	if err := os.Chdir(repos); err != nil {
 		log.Fatal(err)
 	}
 	defer os.Chdir(pwd)
 
+	log.Println("inventorying existing resources")
 	n2l = &lockUrnDb{}
 	updateN2LfromDisk(".")
 	dumpN2L(n2l)
 
+	log.Println("setting up web service")
 	http.HandleFunc("/", mainHandler)
 	http.HandleFunc("/N2Ls", n2lHandler)
 	http.HandleFunc("/N2C", n2cHandler)
 	http.HandleFunc("/resource/", resourceHandler)
-	http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
+	hostport := fmt.Sprintf("%s:%d", rem.hostname, rem.port)
+	log.Printf("listening for connections: %s", hostport)
+	log.Fatal(http.ListenAndServe(hostport, nil))
 }
 
 func dumpN2L(db *lockUrnDb) {
@@ -263,7 +267,8 @@ func resourcePut(meta metadata, w http.ResponseWriter, r *http.Request) {
 	}
 	urn := fmt.Sprintf("urn:%s:resource:%s", nis, meta.Chash)
 	n2l.append(urn, urlFromRemoteAndResource(&rem, meta.Chash))
-	fmt.Fprintf(w, "<p>%v bytes written to %v</p>", len(bytes), urn)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprintf(w, "%v bytes written to %v", len(bytes), urn)
 }
 
 func sendFileContents(pathname string, w http.ResponseWriter, r *http.Request) {

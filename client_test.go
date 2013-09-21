@@ -24,7 +24,7 @@ func TestRespositoryRootReturnsRootWhenThere(t *testing.T) {
 	defer os.Chdir(pwd)
 
 	// test
-	actual, err := repositoryRoot()
+	actual, err := repositoryRoot(".amber")
 	if err != nil {
 		t.Error(err)
 	}
@@ -52,7 +52,7 @@ func TestRespositoryRootReturnsRootWhenBelow(t *testing.T) {
 	defer os.Chdir(pwd)
 
 	// test
-	actual, err := repositoryRoot()
+	actual, err := repositoryRoot(".amber")
 	if err != nil {
 		t.Error(err)
 	}
@@ -80,7 +80,7 @@ func TestRespositoryRootReturnsErrorWhenDotAmberIsFile(t *testing.T) {
 	defer os.Chdir(pwd)
 
 	// test
-	_, err := repositoryRoot()
+	_, err := repositoryRoot(".amber")
 
 	// verify
 	if err == nil {
@@ -101,7 +101,7 @@ func TestRespositoryRootReturnsErrorWhenNotFound(t *testing.T) {
 	defer os.Chdir(pwd)
 
 	// test
-	repos, err := repositoryRoot()
+	repos, err := repositoryRoot(".amber-should-never-see")
 
 	// verify
 	if repos != "" {

@@ -1,6 +1,8 @@
 // client
 package main
 
+// TODO: timeout on network requests
+
 // TODO: for encryption, make sure use Message Authentication Code
 // Alternatively, you can apply your own message authentication, as
 // follows. First, encrypt the message using an appropriate
@@ -32,13 +34,14 @@ import (
 const (
 	MAX_DIR_NAMES   = 1000
 	RC4_TRASH_BYTES = 256
+	REPOSITORY_ROOT = ".amber"
 )
 
 ////////////////////////////////////////
 // repository root
 ////////////////////////////////////////
 
-func repositoryRoot() (repos string, err error) {
+func repositoryRoot(rootName string) (repos string, err error) {
 	pwd, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -46,7 +49,7 @@ func repositoryRoot() (repos string, err error) {
 	// start here, work way up until find .amber in pwd
 	repos = pwd
 	for {
-		pathname := fmt.Sprintf("%s%c.amber", repos, filepath.Separator)
+		pathname := fmt.Sprintf("%s%c%s", repos, filepath.Separator, rootName)
 		fi, err := os.Stat(pathname)
 		if err == nil {
 			if fi.IsDir() {
@@ -158,7 +161,7 @@ func decrypt(blob []byte, algorithm, key string, iv []byte) ([]byte, error) {
 ////////////////////////////////////////
 
 func commit(pathname string) (err error) {
-	root, err := repositoryRoot()
+	root, err := repositoryRoot(REPOSITORY_ROOT)
 	if err != nil {
 		return
 	}
@@ -374,25 +377,22 @@ func resourceFromUrl(url string) (Chash string) {
 
 // TODO: return proper error or refactor so failure to download a
 // resource doesn't kill program
-func doDownload(rem remote, urn, pathname, pHash string) {
-	var meta metadata
-	var err error
-
+func doDownload(rem remote, urn, pathname, pHash string) (err error) {
 	i := strings.LastIndex(urn, ":")
 	if i == -1 {
-		err = fmt.Errorf("cannot find colon: %v", urn)
+		err = fmt.Errorf("cannot find colon in urn: %v", urn)
 		return
 	}
 	resource := urn[i+1:]
 
 	urls, err := resolveUrls(urn, rem)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 
 	meta, cipherBytes, err := downloadResourceFromUrls(urls, resource)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
 
 	iv, err := selectIV(meta.eName, meta.hName, cipherBytes)
@@ -401,15 +401,13 @@ func doDownload(rem remote, urn, pathname, pHash string) {
 	}
 	plainBytes, err := decrypt(cipherBytes, meta.eName, pHash, iv)
 	if err != nil {
-		log.Fatal(err)
+		return
 	}
-	if _, err := checkHash(meta.hName, plainBytes, pHash); err != nil {
-		log.Fatal(err)
+	if _, err = checkHash(meta.hName, plainBytes, pHash); err != nil {
+		return
 	}
 
-	if err = writeFile(pathname, plainBytes); err != nil {
-		log.Fatal(err)
-	}
+	return writeFile(pathname, plainBytes)
 }
 
 func downloadResourceFromUrls(urls []string, Chash string) (meta metadata, blob []byte, err error) {
@@ -512,7 +510,10 @@ func resolveMeta(urn string, rem remote) (meta metadata, err error) {
 	}
 	defer resp.Body.Close()
 
-	// check for 303 or other status code?
+	if resp.StatusCode != 200 {
+		err = fmt.Errorf("%s", resp.Status)
+		return
+	}
 
 	bytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
