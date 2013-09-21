@@ -3,37 +3,21 @@ package main
 
 // TODO: timeout on network requests
 
-// TODO: for encryption, make sure use Message Authentication Code
-// Alternatively, you can apply your own message authentication, as
-// follows. First, encrypt the message using an appropriate
-// symmetric-key encryption scheme (e.g., AES-CBC). Then, take the
-// entire ciphertext (including any IVs, nonces, or other values
-// needed for decryption), apply a message authentication code (e.g.,
-// AES-CMAC, SHA1-HMAC, SHA256-HMAC), and append the resulting MAC
-// digest to the ciphertext before transmission. On the receiving
-// side, check that the MAC digest is valid before decrypting. This is
-// known as the encrypt-then-authenticate construction. (See also: 1,
-// 2.) This also works fine, but requires a little more care from you.
-
 import (
 	"bytes"
-	"crypto/rc4"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 const (
 	MAX_DIR_NAMES   = 1000
-	RC4_TRASH_BYTES = 256
 	REPOSITORY_ROOT = ".amber"
 )
 
@@ -46,16 +30,19 @@ func repositoryRoot(rootName string) (repos string, err error) {
 	if err != nil {
 		return "", err
 	}
+	suffix := fmt.Sprintf("%c%s", filepath.Separator, rootName)
 	// start here, work way up until find .amber in pwd
 	repos = pwd
 	for {
-		pathname := fmt.Sprintf("%s%c%s", repos, filepath.Separator, rootName)
+		pathname := fmt.Sprintf("%s%s", repos, suffix)
 		fi, err := os.Stat(pathname)
 		if err == nil {
 			if fi.IsDir() {
+				// found it
 				repos = pathname
-				break // found it
+				break
 			}
+			// something other than a directory
 			return "", ErrNoRepos
 		}
 		if !os.IsNotExist(err) {
@@ -69,88 +56,6 @@ func repositoryRoot(rootName string) (repos string, err error) {
 		repos = parent
 	}
 	return repos, nil
-}
-
-////////////////////////////////////////
-// encryption / decryption
-////////////////////////////////////////
-
-func selectIV(algorithm, hName string, blob []byte) (iv []byte, err error) {
-	var ivSize int
-	var hash string
-
-	switch {
-	case strings.HasSuffix(algorithm, "128"):
-		ivSize = 16
-	case strings.HasSuffix(algorithm, "192"):
-		ivSize = 24
-	case strings.HasSuffix(algorithm, "256"):
-		ivSize = 32
-	case algorithm == "rc4":
-		return
-	default:
-		return nil, fmt.Errorf("unknown encryption algorithm: " + algorithm)
-	}
-
-	size := fmt.Sprintf("%d", len(blob))
-	hash, err = computeHash(hName, []byte(size))
-	if err != nil {
-		return
-	}
-	iv = make([]byte, ivSize)
-	copy(iv, []byte(hash))
-	return
-}
-
-func encrypt(blob []byte, algorithm, key string, iv []byte) ([]byte, error) {
-	switch {
-	case algorithm == "-":
-		return blob, nil
-		// case strings.HasPrefix(algorithm, "aes"):
-		//	// FIXME: key must be 16, 24, or 32 bytes for AES-128, -192, or -256
-		//	c,err = aes.NewCipher([]byte(key))
-		//	if err != nil {
-		//		return nil, err
-		//	}
-		//	eblob = make([]byte, len(blob)) // padding?
-		//	// TODO
-		//	return eblob, nil
-	case strings.HasPrefix(algorithm, "rc4"):
-		return encryptRC4(blob, key)
-	}
-	return nil, fmt.Errorf("unknown encryption algorithm: %s", algorithm)
-}
-
-func encryptRC4(blob []byte, key string) ([]byte, error) {
-	// TODO: assert key is between 1 and 256 bytes
-	rc4Key := make([]byte, 256)
-	copy(rc4Key, []byte(key))
-	c, err := rc4.NewCipher(rc4Key)
-	if err != nil {
-		return nil, err
-	}
-	// throw away at least 256 bytes of data
-	junk := make([]byte, RC4_TRASH_BYTES)
-	// ??? how does decryption work with below reseeding
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < len(junk); i++ {
-		junk[i] = byte(r.Intn(256))
-	}
-	c.XORKeyStream(junk, junk)
-	// actual encryption
-	c.XORKeyStream(blob, blob)
-	c.Reset()
-	return blob, nil
-}
-
-func decrypt(blob []byte, algorithm, key string, iv []byte) ([]byte, error) {
-	switch {
-	case algorithm == "-":
-		return blob, nil
-	case strings.HasPrefix(algorithm, "rc4"):
-		return encryptRC4(blob, key)
-	}
-	return nil, fmt.Errorf("unknown encryption algorithm: " + algorithm)
 }
 
 ////////////////////////////////////////
