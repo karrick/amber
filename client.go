@@ -59,13 +59,23 @@ func repositoryRoot(rootName string) (repos string, err error) {
 }
 
 ////////////////////////////////////////
-// commit
+// createCommit
 //
 // directory loaded into cache (pcache, then encrypted into ecache)
 // new tip created
 ////////////////////////////////////////
 
-func commit(pathname string) (err error) {
+// TODO: revise this struct; do I need all metadata?
+type commit struct {
+	name   string				// some urn?
+	meta   metadata
+	parent *commit
+	// when merging, a commit has two parents, primary is parent,
+	// while secondary is merge
+	merge *commit
+}
+
+func createCommit(pathname string) (c commit, err error) {
 	root, err := repositoryRoot(REPOSITORY_ROOT)
 	if err != nil {
 		return
@@ -75,7 +85,12 @@ func commit(pathname string) (err error) {
 	meta.hName = DefaultHash
 	meta.eName = DefaultEncryption
 	meta.uName = "-"
-	return commitPathname(root, pathname, meta)
+	err = commitPathname(root, pathname, meta)
+	if err != nil {
+		return
+	}
+	c = commit{name: pathname, meta: *meta}
+	return
 }
 
 func commitPathname(repositoryRoot, pathname string, meta *metadata) (err error) {
@@ -98,7 +113,9 @@ func commitPathname(repositoryRoot, pathname string, meta *metadata) (err error)
 }
 
 func commitDirectory(repositoryRoot, pathname string, meta *metadata) (err error) {
-	log.Println("COMMIT DIRECTORY:", pathname)
+	if debug {
+		log.Println("COMMIT DIRECTORY:", pathname)
+	}
 	meta.Type = "directory"
 	fh, err := os.Open(pathname)
 	if err != nil {
@@ -147,7 +164,9 @@ func commitDirectory(repositoryRoot, pathname string, meta *metadata) (err error
 }
 
 func commitFile(repositoryRoot, pathname string, meta *metadata) (err error) {
-	log.Println("COMMIT FILE:", pathname)
+	if debug {
+		log.Println("COMMIT FILE:", pathname)
+	}
 	meta.Type = "file"
 	plainBytes, err := ioutil.ReadFile(pathname)
 	if err != nil {
@@ -245,7 +264,9 @@ func upload(pathname string, meta *metadata, client *http.Client, rem *remote) (
 		return
 	}
 	url := urlFromRemoteAndResource(rem, meta.Chash)
-	log.Print("PUT: " + url)
+	if debug {
+		log.Print("PUT: " + url)
+	}
 	reader := bytes.NewReader(cipherBytes)
 	req, err := http.NewRequest("PUT", url, reader)
 	if err != nil {
@@ -266,8 +287,10 @@ func upload(pathname string, meta *metadata, client *http.Client, rem *remote) (
 	if err != nil {
 		return
 	}
-	log.Printf("pHash: %s\n", meta.Phash)
-	log.Printf("upload response:\n%v", string(out))
+	if debug {
+		log.Printf("pHash: %s\n", meta.Phash)
+		log.Printf("upload response:\n%v", string(out))
+	}
 	return
 }
 

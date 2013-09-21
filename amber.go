@@ -64,6 +64,7 @@ const (
 // are called by http server library, so making them...global
 
 var (
+	debug	bool
 	rem        remote
 	ErrNoRepos = errors.New("no repository found")
 )
@@ -217,6 +218,7 @@ func usage() {
 
 func main() {
 	var err error
+	flag.BoolVar(&debug, "debug", false, "debug flag")
 	flag.StringVar(&rem.hostname, "hostname", "localhost", "server hostname")
 	flag.IntVar(&rem.port, "port", 49154, "server port")
 	flag.Parse()
@@ -241,10 +243,13 @@ func main() {
 	// TODO: will want to hold onto longer when doing more than
 	// single upload
 	client := &http.Client{}
+	var t commit
 
 	switch {
 	case cmd == "commit":
-		err = commit(flag.Arg(1))
+		if t, err = createCommit(flag.Arg(1)); err == nil {
+			fmt.Printf("%#v\n", t)
+		}
 	case cmd == "download":
 		err = doDownload(rem, flag.Arg(1), flag.Arg(2), flag.Arg(3))
 	case cmd == "help":
