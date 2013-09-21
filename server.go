@@ -45,7 +45,7 @@ func server(rem remote, repos string) {
 	http.HandleFunc("/resource/", resourceHandler)
 	hostport := fmt.Sprintf("%s:%d", rem.hostname, rem.port)
 	log.Printf("listening for connections: %s", hostport)
-	log.Fatal(http.ListenAndServe(hostport, nil))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", rem.port), nil))
 }
 
 func dumpN2L(db *lockUrnDb) {
