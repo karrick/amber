@@ -26,7 +26,7 @@ func TestParseConfigFileMissingFile(t *testing.T) {
 
 func TestParseConfigFile(t *testing.T) {
 	pathname := "test/config"
-	contents := "Alpha=One\nBravo=Two\n[Section1]\nCharlie=Three\n" +
+	contents := " ; Comment\n\nAlpha=One\nBravo=Two\n[Section1]\nCharlie=Three\n" +
 		"[Section2]\nDelta=Four\n"
 	err := ioutil.WriteFile(pathname, []byte(contents), 0600)
 	if err != nil {

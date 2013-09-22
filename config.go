@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"regexp"
@@ -31,15 +32,22 @@ func parseConfigFile(pathname string) (conf configuration, err error) {
 			return
 		}
 		line = strings.TrimSpace(line)
+		switch {
+		case len(line) == 0:
+			continue
+		case strings.IndexRune(line, ';') == 0:
+			continue
+		}
 		if md := sectionRe.FindStringSubmatch(line); md != nil {
 			section = md[1]
-		}
-		if md := keyValRe.FindStringSubmatch(line); md != nil {
-			key, val := md[1], md[2]
+		} else if md := keyValRe.FindStringSubmatch(line); md != nil {
 			if conf[section] == nil {
 				conf[section] = make(map[string]string)
 			}
-			conf[section][key] = val
+			conf[section][md[1]] = md[2]
+		} else {
+			err = fmt.Errorf("invalid config line: %s", line)
+			return
 		}
 	}
 	return
