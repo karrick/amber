@@ -51,7 +51,9 @@ func server(rem remote, repos string) {
 func dumpN2L(db *lockUrnDb) {
 	urns := db.keys()
 	for _, urn := range urns {
-		fmt.Println(urn)
+		if debug {
+			fmt.Println(urn)
+		}
 		urls, _ := db.get(urn)
 		for _, url := range urls {
 			if debug {
@@ -304,7 +306,6 @@ func resourceGet(meta metadata, w http.ResponseWriter, r *http.Request) {
 	metaFoo, err := parseUrc(blob)
 	w.Header().Set("X-Amber-Encryption", metaFoo.eName)
 	w.Header().Set("X-Amber-Hash", metaFoo.hName)
-	w.Header().Set("Content-Length", metaFoo.size)
 	sendFileContents(meta.bpathname, w, r)
 }
 
@@ -363,9 +364,10 @@ func sendFileContents(pathname string, w http.ResponseWriter, r *http.Request) {
 		if debug {
 			log.Print(err)
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.NotFound(w, r)
 		return
 	}
+	w.Header().Set("Content-Length", fmt.Sprint(len(bytes)))
 	w.Write(bytes)
 	return
 }
