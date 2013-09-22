@@ -1,8 +1,7 @@
 package main
 
 import (
-	// "fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 )
 
@@ -28,10 +27,15 @@ func TestParseConfigFile(t *testing.T) {
 	pathname := "test/config"
 	contents := " ; Comment\n\nAlpha=One\nBravo=Two\n[Section1]\nCharlie=Three\n" +
 		"[Section2]\nDelta=Four\n"
-	err := ioutil.WriteFile(pathname, []byte(contents), 0600)
+	err := writeFile(pathname, []byte(contents))
 	if err != nil {
 		t.Errorf("cannot write fixture file: %s\n", pathname)
 	}
+	defer func() { 
+		if err := os.RemoveAll("test"); err != nil {
+			t.Errorf("failed to remove test directory: %s\n", err)
+		}
+	}()
 
 	expected := map[string]map[string]string{
 		"General": {
@@ -47,6 +51,7 @@ func TestParseConfigFile(t *testing.T) {
 	}
 
 	config, err := parseConfigFile(pathname)
+
 	if err != nil {
 		t.Errorf("Did not expect error: %v\n", err.Error())
 	}
