@@ -294,20 +294,10 @@ func upload(pathname string, meta *metadata, client *http.Client, rem *remote) (
 	return
 }
 
-func resourceFromUrl(url string) (Chash string) {
-	i := strings.LastIndex(url, "/")
-	if i == -1 {
-		return ""
-	}
-	return url[i+1:]
-}
-
-// TODO: return proper error or refactor so failure to download a
-// resource doesn't kill program
 func doDownload(rem remote, urn, pathname, pHash string) (err error) {
 	i := strings.LastIndex(urn, ":")
 	if i == -1 {
-		err = fmt.Errorf("cannot find colon in urn: %v", urn)
+		err = fmt.Errorf("cannot find colon: %v", urn)
 		return
 	}
 	resource := urn[i+1:]
@@ -352,7 +342,9 @@ func downloadResourceFromUrls(urls []string, Chash string) (meta metadata, blob 
 }
 
 func downloadResource(url, Chash string) (meta metadata, blob []byte, err error) {
-	log.Printf("downloadResource: %s", url)
+	if debug {
+		log.Printf("downloadResource: %s", url)
+	}
 	resp, err := http.Get(url)
 	if err != nil {
 		return

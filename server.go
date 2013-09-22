@@ -33,12 +33,12 @@ func server(rem remote, repos string) {
 	}
 	defer os.Chdir(pwd)
 
-	log.Println("inventorying existing resources")
+	log.Print("inventorying existing resources")
 	n2l = &lockUrnDb{}
 	updateN2LfromDisk(".")
 	dumpN2L(n2l)
 
-	log.Println("setting up web service")
+	log.Print("setting up web service")
 	http.HandleFunc("/", mainHandler)
 	http.HandleFunc("/N2Ls", n2lHandler)
 	http.HandleFunc("/N2C", n2cHandler)
@@ -54,7 +54,9 @@ func dumpN2L(db *lockUrnDb) {
 		fmt.Println(urn)
 		urls, _ := db.get(urn)
 		for _, url := range urls {
-			fmt.Println("  ", url)
+			if debug {
+				fmt.Println("  ", url)
+			}
 		}
 	}
 }
@@ -83,45 +85,72 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 
 func n2lHandler(w http.ResponseWriter, r *http.Request) {
 	// http://localhost:8080/N2Ls?urn:x-amber:resource:abc123
-	// PREREQ: n2l dictionary is not nil
 	log.Printf("%v %v", r.Method, r.RequestURI)
 
 	if r.Method != "GET" {
-		http.Error(w, "method not allowed: "+r.Method, http.StatusMethodNotAllowed)
+		err := fmt.Errorf("method not allowed: %s", r.Method)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusMethodNotAllowed)
 		return
 	}
 
 	i := strings.Index(r.RequestURI, "?")
 	if i == -1 {
-		http.Error(w, "cannot find ?: "+r.RequestURI, http.StatusBadRequest)
+		err := fmt.Errorf("cannot find ?: %s", r.RequestURI)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	query := r.RequestURI[i+1:]
 	parts := strings.Split(query, ":")
 	if len(parts) != 4 {
-		http.Error(w, "cannot find 3 colons: "+query, http.StatusBadRequest)
+		err := fmt.Errorf("cannot find 3 colons: %s", query)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// urn
 	if parts[0] != "urn" {
-		http.Error(w, "cannot find urn: "+query, http.StatusBadRequest)
+		err := fmt.Errorf("cannot find urn: %s", query)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// nid
 	if parts[1] != "x-amber" && parts[1] != "amber" {
-		http.Error(w, "NID is not amber: "+query+": "+parts[1], http.StatusBadRequest)
+		err := fmt.Errorf("NIS is not amber: %s:%s", query, parts[1])
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// nss (resource)
 	if parts[2] != "resource" {
-		http.Error(w, "NSS ought start with resource: "+query+": "+parts[1], http.StatusBadRequest)
+		err := fmt.Errorf("NSS ought start with resource: %s:%s", query, parts[1])
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// nss (cHash)
 	cHash := parts[3]
 	if cHash == "" {
-		http.Error(w, "empty resource hash in NSS: "+query, http.StatusBadRequest)
+		err := fmt.Errorf("empty resource hash in NSS: %s", query)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -137,8 +166,8 @@ func n2lHandler(w http.ResponseWriter, r *http.Request) {
 			response.WriteString(item)
 			response.WriteString(crlf)
 		}
+		w.WriteHeader(303)
 		w.Write(response.Bytes())
-		// w.WriteHeader(303)
 		return
 	}
 	// OPTIONAL: before failure, resolve URN by peer query
@@ -151,41 +180,69 @@ func n2cHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%v %v", r.Method, r.RequestURI)
 
 	if r.Method != "GET" {
-		http.Error(w, "method not allowed: "+r.Method, http.StatusMethodNotAllowed)
+		err := fmt.Errorf("method not allowed: %s", r.Method)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusMethodNotAllowed)
 		return
 	}
 
 	i := strings.Index(r.RequestURI, "?")
 	if i == -1 {
-		http.Error(w, "cannot find ?: "+r.RequestURI, http.StatusBadRequest)
+		err := fmt.Errorf("cannot find ?: %s", r.RequestURI)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	query := r.RequestURI[i+1:]
 	parts := strings.Split(query, ":")
 	if len(parts) != 4 {
-		http.Error(w, "cannot find 3 colons: "+query, http.StatusBadRequest)
+		err := fmt.Errorf("cannot find 3 colons: %s", query)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// urn
 	if parts[0] != "urn" {
-		http.Error(w, "cannot find urn: "+query, http.StatusBadRequest)
+		err := fmt.Errorf("cannot find urn: %s", query)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// nid
 	if parts[1] != "x-amber" && parts[1] != "amber" {
-		http.Error(w, "NID is not amber: "+query+": "+parts[1], http.StatusBadRequest)
+		err := fmt.Errorf("NID is not amber: %s:%s", query, parts[1])
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// nss (resource)
 	if parts[2] != "resource" {
-		http.Error(w, "NSS ought start with resource: "+query+": "+parts[1], http.StatusBadRequest)
+		err := fmt.Errorf("NSS ought start with resource: %s:%s", query, parts[1])
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	// nss (cHash)
 	cHash := parts[3]
 	if cHash == "" {
-		http.Error(w, "empty resource hash in NSS: "+query, http.StatusBadRequest)
+		err := fmt.Errorf("empty resource hash in NSS: %s", query)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -197,11 +254,17 @@ func resourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%v %v", r.Method, r.URL.Path)
 	meta, err := request2metadata(r)
 	if err != nil {
+		if debug {
+			log.Print(err)
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if meta.uName != "-" {
 		if err := verifySignature(meta, r); err != nil {
+			if debug {
+				log.Print(err)
+			}
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -212,7 +275,11 @@ func resourceHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "PUT":
 		resourcePut(meta, w, r)
 	default:
-		http.Error(w, "method not allowed: "+r.Method, http.StatusMethodNotAllowed)
+		err := fmt.Errorf("method not allowed: %s", r.Method)
+		if debug {
+			log.Print(err)
+		}
+		http.Error(w, err.Error(), http.StatusMethodNotAllowed)
 		return
 	}
 }
@@ -222,8 +289,14 @@ func resourceGet(meta metadata, w http.ResponseWriter, r *http.Request) {
 	blob, err := ioutil.ReadFile(metaPathname)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if debug {
+				log.Print(err)
+			}
 			http.NotFound(w, r)
 			return
+		}
+		if debug {
+			log.Print(err)
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -231,32 +304,38 @@ func resourceGet(meta metadata, w http.ResponseWriter, r *http.Request) {
 	metaFoo, err := parseUrc(blob)
 	w.Header().Set("X-Amber-Encryption", metaFoo.eName)
 	w.Header().Set("X-Amber-Hash", metaFoo.hName)
+	w.Header().Set("Content-Length", metaFoo.size)
 	sendFileContents(meta.bpathname, w, r)
 }
 
 func resourcePut(meta metadata, w http.ResponseWriter, r *http.Request) {
 	if meta.hName == "-" {
 		err := fmt.Errorf("hash name cannot be '-': %#v", meta)
+		if debug {
+			log.Print(err)
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if meta.size == "-" {
-		err := fmt.Errorf("size cannot be '-': %#v", meta)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
 	bytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
+		if debug {
+			log.Print(err)
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	_, err = checkHash(meta.hName, bytes, meta.Chash)
-	if err != nil {
+	if _, err = checkHash(meta.hName, bytes, meta.Chash); err != nil {
+		if debug {
+			log.Print(err)
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err = writeFile(meta.bpathname, bytes); err != nil {
+	if err = writeFileNoOverwrite(meta.bpathname, bytes); err != nil {
+		if debug {
+			log.Print(err)
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -265,7 +344,10 @@ func resourcePut(meta metadata, w http.ResponseWriter, r *http.Request) {
 		"X-Amber-Hash: %v\r\n"+
 		"X-Amber-Encryption: %v\r\n",
 		len(bytes), meta.hName, meta.eName)
-	if err = writeFile(meta.mpathname, []byte(metablob)); err != nil {
+	if err = writeFileNoOverwrite(meta.mpathname, []byte(metablob)); err != nil {
+		if debug {
+			log.Print(err)
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -276,21 +358,11 @@ func resourcePut(meta metadata, w http.ResponseWriter, r *http.Request) {
 }
 
 func sendFileContents(pathname string, w http.ResponseWriter, r *http.Request) {
-	fi, err := os.Stat(pathname)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	if fi.IsDir() {
-		err := fmt.Errorf("found dir instead of file: %s", pathname)
-		log.Printf(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 	bytes, err := ioutil.ReadFile(pathname)
 	if err != nil {
-		err := fmt.Errorf("error reading file: %s: %s", pathname, err)
-		log.Printf(err.Error())
+		if debug {
+			log.Print(err)
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -314,5 +386,3 @@ func verifySignature(meta metadata, r *http.Request) (err error) {
 	// }
 	return fmt.Errorf("unauthorized")
 }
-
-////////////////////////////////////////

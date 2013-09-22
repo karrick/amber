@@ -180,6 +180,13 @@ func computeHash(hName string, blob []byte) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
+func writeFileNoOverwrite(pathname string, blob []byte) (err error) {
+	if _, err = os.Stat(pathname); err == nil {
+		return
+	}
+	return writeFile(pathname, blob)
+}
+
 func writeFile(pathname string, blob []byte) (err error) {
 	dirname := filepath.Dir(pathname)
 	if err = os.MkdirAll(dirname, 0700); err != nil {
