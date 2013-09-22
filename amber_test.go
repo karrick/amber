@@ -96,7 +96,7 @@ func TestInvalidHashFormat(t *testing.T) {
 
 ////////////////////////////////////////
 
-func TestRequest2metadataRejectsInvalidURL(t *testing.T) {
+func TestResourceRequest2metadataRejectsInvalidURL(t *testing.T) {
 	var cases = map[string]string{
 		"":                 "invalid url: ",
 		"/":                "invalid url: /",
@@ -110,14 +110,14 @@ func TestRequest2metadataRejectsInvalidURL(t *testing.T) {
 
 	for path, expected := range cases {
 		r := &http.Request{URL: &url.URL{Path: path}}
-		_, actual := request2metadata(r)
+		_, actual := resourceRequest2metadata(r)
 		if actual.Error() != expected {
 			t.Errorf("Data mismatch:\n   actual: [%s]\n expected: [%s]\n", actual, expected)
 		}
 	}
 }
 
-func TestRequest2metadataRejectsInvalidUser(t *testing.T) {
+func TestResourceRequest2metadataRejectsInvalidUser(t *testing.T) {
 	var cases = map[string]string{
 		"":       "invalid: ",
 		"../abc": "invalid: ../abc",
@@ -129,7 +129,7 @@ func TestRequest2metadataRejectsInvalidUser(t *testing.T) {
 			"X-Amber-User": {user},
 		}
 		r := &http.Request{URL: &url.URL{Path: path}, Header: headers}
-		meta, err := request2metadata(r)
+		meta, err := resourceRequest2metadata(r)
 		if err.Error() != expected {
 			t.Errorf("Data mismatch:\n   actual: [%s]\n expected: [%s]\n", err.Error(), expected)
 		}
@@ -139,7 +139,7 @@ func TestRequest2metadataRejectsInvalidUser(t *testing.T) {
 	}
 }
 
-func TestRequest2metadata(t *testing.T) {
+func TestResourceRequest2metadata(t *testing.T) {
 	var cases = map[string]map[string]string{
 		"resource/abc123/users/0000abcdef": {
 			"cHash": "abc123",
@@ -157,7 +157,7 @@ func TestRequest2metadata(t *testing.T) {
 			"X-Amber-User": {req["uName"]},
 		}
 		r := &http.Request{URL: &url.URL{Path: path}, Header: headers}
-		actual, err := request2metadata(r)
+		actual, err := resourceRequest2metadata(r)
 		if actual.bpathname != expected {
 			t.Errorf("Data mismatch:\n   actual: [%s]\n expected: [%s]\n", actual, expected)
 		}

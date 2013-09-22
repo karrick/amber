@@ -35,7 +35,7 @@ func server(rem remote, repos string) {
 
 	log.Print("inventorying existing resources")
 	n2l = &lockUrnDb{}
-	updateN2LfromDisk(".")
+	updateN2LfromDisk(".", n2l)
 	dumpN2L(n2l)
 
 	log.Print("setting up web service")
@@ -51,38 +51,93 @@ func server(rem remote, repos string) {
 func dumpN2L(db *lockUrnDb) {
 	urns := db.keys()
 	for _, urn := range urns {
-		if debug {
-			fmt.Println(urn)
-		}
 		urls, _ := db.get(urn)
 		for _, url := range urls {
 			if debug {
-				fmt.Println("  ", url)
+				log.Print(url)
 			}
 		}
 	}
 }
 
-func updateN2LfromDisk(reposDir string) (err error) {
+func updateN2LfromDisk(reposDir string, db *lockUrnDb) (err error) {
+	// closure over db
+	walkFn := func(path string, info os.FileInfo, err error) error {
+		parts := strings.Split(path, string(filepath.Separator))
+		if len(parts) == 2 {
+			if isHashInvalid(parts[1]) {
+				return fmt.Errorf("invalid item in repository: %s", path)
+			}
+			// urn := fmt.Sprintf("urn:%s:%s:%s", nis, parts[0], parts[1])
+			db.append(parts[1], urlFromRemoteAndResource(&rem, parts[1]))
+			return filepath.SkipDir
+		}
+		return nil
+	}
 	err = filepath.Walk(reposDir, walkFn)
 	return
 }
 
-func walkFn(path string, info os.FileInfo, err error) error {
-	parts := strings.Split(path, string(filepath.Separator))
-	if len(parts) == 2 {
-		if isHashInvalid(parts[1]) {
-			return fmt.Errorf("invalid item in repository: %s", path)
-		}
-		urn := fmt.Sprintf("urn:%s:%s:%s", nis, parts[0], parts[1])
-		n2l.append(urn, urlFromRemoteAndResource(&rem, parts[1]))
-		return filepath.SkipDir
-	}
-	return nil
-}
-
 func mainHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<h1>Amber</h1><p>Coming soon...</p>")
+}
+
+func urnRequest2Metadata(r *http.Request) (query, resource string, err error) {
+	log.Printf("%v %v", r.Method, r.RequestURI)
+
+	i := strings.IndexRune(r.RequestURI, '?')
+	if i == -1 {
+		err = fmt.Errorf("cannot find ?: %s", r.RequestURI)
+		return
+	}
+
+	query = r.RequestURI[i+1:]
+	parts := strings.Split(query, ":")
+	if len(parts) != 4 {
+		err = fmt.Errorf("cannot find 3 colons: %s", query)
+		if debug {
+			log.Print(err)
+		}
+		return
+	}
+	// urn
+	if parts[0] != "urn" {
+		err = fmt.Errorf("cannot find urn: %s", query)
+		if debug {
+			log.Print(err)
+		}
+		return
+	}
+	// nid
+	if parts[1] != "x-amber" && parts[1] != "amber" {
+		err = fmt.Errorf("NID is not amber: %s:%s", query, parts[1])
+		if debug {
+			log.Print(err)
+		}
+		return
+	}
+	// nss (resource)
+	if parts[2] != "resource" {
+		err = fmt.Errorf("NSS ought start with resource: %s:%s", query, parts[1])
+		if debug {
+			log.Print(err)
+		}
+		return
+	}
+	// nss (cHash)
+	resource = parts[3]
+	if resource == "" {
+		err = fmt.Errorf("empty resource hash in NSS: %s", query)
+		if debug {
+			log.Print(err)
+		}
+		return
+	}
+	if isHashInvalid(resource) {
+		err = fmt.Errorf("invalid hash: %s", resource)
+		return
+	}
+	return
 }
 
 func n2lHandler(w http.ResponseWriter, r *http.Request) {
@@ -98,74 +153,24 @@ func n2lHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	i := strings.Index(r.RequestURI, "?")
-	if i == -1 {
-		err := fmt.Errorf("cannot find ?: %s", r.RequestURI)
+	query, resource, err := urnRequest2Metadata(r)
+	if err != nil {
 		if debug {
 			log.Print(err)
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	query := r.RequestURI[i+1:]
-	parts := strings.Split(query, ":")
-	if len(parts) != 4 {
-		err := fmt.Errorf("cannot find 3 colons: %s", query)
-		if debug {
-			log.Print(err)
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	// urn
-	if parts[0] != "urn" {
-		err := fmt.Errorf("cannot find urn: %s", query)
-		if debug {
-			log.Print(err)
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	// nid
-	if parts[1] != "x-amber" && parts[1] != "amber" {
-		err := fmt.Errorf("NIS is not amber: %s:%s", query, parts[1])
-		if debug {
-			log.Print(err)
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	// nss (resource)
-	if parts[2] != "resource" {
-		err := fmt.Errorf("NSS ought start with resource: %s:%s", query, parts[1])
-		if debug {
-			log.Print(err)
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	// nss (cHash)
-	cHash := parts[3]
-	if cHash == "" {
-		err := fmt.Errorf("empty resource hash in NSS: %s", query)
-		if debug {
-			log.Print(err)
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
 	}
 
 	// look up
-	if urls, ok := n2l.get(query); ok {
+	if urls, ok := n2l.get(resource); ok {
 		w.Header().Set("Content-Type", "text/uri-list; charset=utf-8")
 
 		var response bytes.Buffer
 		response.WriteString("# ")
 		response.WriteString(query)
 		response.WriteString(crlf)
-		for _, item := range urls {
-			response.WriteString(item)
+		for i := range urls {
+			response.WriteString(urls[i])
 			response.WriteString(crlf)
 		}
 		w.WriteHeader(303)
@@ -178,7 +183,6 @@ func n2lHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func n2cHandler(w http.ResponseWriter, r *http.Request) {
-	// http://localhost:8080/N2C?urn:x-amber:resource:abc123
 	log.Printf("%v %v", r.Method, r.RequestURI)
 
 	if r.Method != "GET" {
@@ -190,71 +194,20 @@ func n2cHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	i := strings.Index(r.RequestURI, "?")
-	if i == -1 {
-		err := fmt.Errorf("cannot find ?: %s", r.RequestURI)
+	_, resource, err := urnRequest2Metadata(r)
+	if err != nil {
 		if debug {
 			log.Print(err)
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
 	}
-
-	query := r.RequestURI[i+1:]
-	parts := strings.Split(query, ":")
-	if len(parts) != 4 {
-		err := fmt.Errorf("cannot find 3 colons: %s", query)
-		if debug {
-			log.Print(err)
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	// urn
-	if parts[0] != "urn" {
-		err := fmt.Errorf("cannot find urn: %s", query)
-		if debug {
-			log.Print(err)
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	// nid
-	if parts[1] != "x-amber" && parts[1] != "amber" {
-		err := fmt.Errorf("NID is not amber: %s:%s", query, parts[1])
-		if debug {
-			log.Print(err)
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	// nss (resource)
-	if parts[2] != "resource" {
-		err := fmt.Errorf("NSS ought start with resource: %s:%s", query, parts[1])
-		if debug {
-			log.Print(err)
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	// nss (cHash)
-	cHash := parts[3]
-	if cHash == "" {
-		err := fmt.Errorf("empty resource hash in NSS: %s", query)
-		if debug {
-			log.Print(err)
-		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	pathname := fmt.Sprintf("resource/%s/meta", cHash)
+	pathname := fmt.Sprintf("resource/%s/meta", resource)
 	sendFileContents(pathname, w, r)
 }
 
 func resourceHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("%v %v", r.Method, r.URL.Path)
-	meta, err := request2metadata(r)
+	meta, err := resourceRequest2metadata(r)
 	if err != nil {
 		if debug {
 			log.Print(err)
@@ -353,7 +306,7 @@ func resourcePut(meta metadata, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	urn := fmt.Sprintf("urn:%s:resource:%s", nis, meta.Chash)
-	n2l.append(urn, urlFromRemoteAndResource(&rem, meta.Chash))
+	n2l.append(meta.Chash, urlFromRemoteAndResource(&rem, meta.Chash))
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fmt.Fprintf(w, "%v bytes written to %v", len(bytes), urn)
 }

@@ -106,7 +106,7 @@ func mustLookupHeader(h http.Header, name string) (string, error) {
 }
 
 // construct metadata object from URI and Headers
-func request2metadata(r *http.Request) (meta metadata, err error) {
+func resourceRequest2metadata(r *http.Request) (meta metadata, err error) {
 	// "/resource/contentHash" => []string{ "", "resource", "contentHash", }
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) != 3 {
