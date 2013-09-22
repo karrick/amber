@@ -31,7 +31,7 @@ func TestParseConfigFile(t *testing.T) {
 	if err != nil {
 		t.Errorf("cannot write fixture file: %s\n", pathname)
 	}
-	defer func() { 
+	defer func() {
 		if err := os.RemoveAll("test"); err != nil {
 			t.Errorf("failed to remove test directory: %s\n", err)
 		}
