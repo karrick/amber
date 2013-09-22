@@ -129,8 +129,7 @@ func commitDirectory(repositoryRoot, pathname string, meta *metadata) (err error
 		names, err = fh.Readdirnames(MAX_DIR_NAMES)
 		if err != nil {
 			if err == io.EOF {
-				// err = nil // ignored by overwrite
-				break // done
+				break
 			}
 			return
 		}
@@ -176,16 +175,14 @@ func commitFile(repositoryRoot, pathname string, meta *metadata) (err error) {
 }
 
 func commitBytes(repositoryRoot string, blob []byte, meta *metadata) (err error) {
-	meta.size = fmt.Sprintf("%d", len(blob))
+	meta.size = fmt.Sprint(len(blob))
 	meta.Phash, err = computeHash(meta.hName, blob)
 	if err != nil {
 		return
 	}
 	fname := fmt.Sprintf("%s/pcache/resource/%s", repositoryRoot, meta.Phash)
-	if _, err = os.Stat(fname); os.IsNotExist(err) {
-		if err = writeFile(fname, blob); err != nil {
-			return
-		}
+	if err = writeFileNoOverwrite(fname, blob); err != nil {
+		return
 	}
 	iv, err := selectIV(meta.eName, meta.hName, blob)
 	if err != nil {
@@ -201,12 +198,7 @@ func commitBytes(repositoryRoot string, blob []byte, meta *metadata) (err error)
 		return
 	}
 	fname = fmt.Sprintf("%s/ecache/resource/%s", repositoryRoot, meta.Chash)
-	if _, err = os.Stat(fname); os.IsNotExist(err) {
-		if err = writeFile(fname, cipherBytes); err != nil {
-			return
-		}
-	}
-	return
+	return writeFileNoOverwrite(fname, cipherBytes)
 }
 
 ////////////////////////////////////////
@@ -282,14 +274,18 @@ func upload(pathname string, meta *metadata, client *http.Client, rem *remote) (
 	if err != nil {
 		return
 	}
-	out, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
+	out, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
+	if resp.StatusCode != 201 {
+		err = fmt.Errorf("%s: %s", resp.Status, string(out))
+		return
+	}
 	if debug {
-		log.Printf("pHash: %s\n", meta.Phash)
-		log.Printf("upload response:\n%v", string(out))
+		log.Printf("Phash: %s\n", meta.Phash)
+		log.Printf("response: %q", string(out))
 	}
 	return
 }
@@ -301,6 +297,10 @@ func doDownload(rem remote, urn, pathname, pHash string) (err error) {
 		return
 	}
 	resource := urn[i+1:]
+	if isHashInvalid(resource) {
+		err = fmt.Errorf("invalid resource: %s", resource)
+		return
+	}
 
 	urls, err := resolveUrls(urn, rem)
 	if err != nil {

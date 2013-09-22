@@ -57,7 +57,6 @@ const (
 	DefaultHash       = "sha256"
 	MaxUrlLength      = 2083 // IE 9 limitation
 	crlf              = "\r\n"
-	nis               = "x-amber"
 )
 
 // these variables need to be accessible from within functions that
@@ -145,7 +144,7 @@ func resourceRequest2metadata(r *http.Request) (meta metadata, err error) {
 		meta.hName = "-"
 		err = nil
 	}
-	meta.size = fmt.Sprintf("%d", r.ContentLength)
+	meta.size = fmt.Sprint(r.ContentLength)
 
 	meta.bpathname = fmt.Sprintf("%s/users/%s", r.URL.Path[1:], meta.uName)
 	meta.mpathname = fmt.Sprintf("%s/meta", r.URL.Path[1:])

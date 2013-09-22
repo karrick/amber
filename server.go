@@ -22,6 +22,10 @@ import (
 // global
 ////////////////////////////////////////
 
+const (
+	nis = "x-amber"
+)
+
 var n2l *lockUrnDb
 
 ////////////////////////////////////////
@@ -68,7 +72,6 @@ func updateN2LfromDisk(reposDir string, db *lockUrnDb) (err error) {
 			if isHashInvalid(parts[1]) {
 				return fmt.Errorf("invalid item in repository: %s", path)
 			}
-			// urn := fmt.Sprintf("urn:%s:%s:%s", nis, parts[0], parts[1])
 			db.append(parts[1], urlFromRemoteAndResource(&rem, parts[1]))
 			return filepath.SkipDir
 		}
@@ -82,66 +85,39 @@ func mainHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "<h1>Amber</h1><p>Coming soon...</p>")
 }
 
-func urnRequest2Metadata(r *http.Request) (query, resource string, err error) {
-	log.Printf("%v %v", r.Method, r.RequestURI)
-
+func parseUrnRequest(r *http.Request) (query, resource string, err error) {
 	i := strings.IndexRune(r.RequestURI, '?')
 	if i == -1 {
 		err = fmt.Errorf("cannot find ?: %s", r.RequestURI)
 		return
 	}
-
 	query = r.RequestURI[i+1:]
 	parts := strings.Split(query, ":")
 	if len(parts) != 4 {
-		err = fmt.Errorf("cannot find 3 colons: %s", query)
-		if debug {
-			log.Print(err)
-		}
+		err = fmt.Errorf("invalid urn format: %s", query)
 		return
 	}
-	// urn
 	if parts[0] != "urn" {
 		err = fmt.Errorf("cannot find urn: %s", query)
-		if debug {
-			log.Print(err)
-		}
 		return
 	}
-	// nid
 	if parts[1] != "x-amber" && parts[1] != "amber" {
-		err = fmt.Errorf("NID is not amber: %s:%s", query, parts[1])
-		if debug {
-			log.Print(err)
-		}
+		err = fmt.Errorf("NID is not amber: %s", query)
 		return
 	}
-	// nss (resource)
 	if parts[2] != "resource" {
-		err = fmt.Errorf("NSS ought start with resource: %s:%s", query, parts[1])
-		if debug {
-			log.Print(err)
-		}
+		err = fmt.Errorf("NSS ought start with resource: %s:%s", query)
 		return
 	}
-	// nss (cHash)
+	if isHashInvalid(parts[3]) {
+		err = fmt.Errorf("invalid resource: %s", query)
+		return
+	}
 	resource = parts[3]
-	if resource == "" {
-		err = fmt.Errorf("empty resource hash in NSS: %s", query)
-		if debug {
-			log.Print(err)
-		}
-		return
-	}
-	if isHashInvalid(resource) {
-		err = fmt.Errorf("invalid hash: %s", resource)
-		return
-	}
 	return
 }
 
 func n2lHandler(w http.ResponseWriter, r *http.Request) {
-	// http://localhost:8080/N2Ls?urn:x-amber:resource:abc123
 	log.Printf("%v %v", r.Method, r.RequestURI)
 
 	if r.Method != "GET" {
@@ -153,7 +129,7 @@ func n2lHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query, resource, err := urnRequest2Metadata(r)
+	query, resource, err := parseUrnRequest(r)
 	if err != nil {
 		if debug {
 			log.Print(err)
@@ -164,7 +140,6 @@ func n2lHandler(w http.ResponseWriter, r *http.Request) {
 	// look up
 	if urls, ok := n2l.get(resource); ok {
 		w.Header().Set("Content-Type", "text/uri-list; charset=utf-8")
-
 		var response bytes.Buffer
 		response.WriteString("# ")
 		response.WriteString(query)
@@ -194,7 +169,7 @@ func n2cHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, resource, err := urnRequest2Metadata(r)
+	_, resource, err := parseUrnRequest(r)
 	if err != nil {
 		if debug {
 			log.Print(err)
@@ -243,15 +218,12 @@ func resourceGet(meta metadata, w http.ResponseWriter, r *http.Request) {
 	metaPathname := fmt.Sprintf("resource/%s/meta", meta.Chash)
 	blob, err := ioutil.ReadFile(metaPathname)
 	if err != nil {
-		if os.IsNotExist(err) {
-			if debug {
-				log.Print(err)
-			}
-			http.NotFound(w, r)
-			return
-		}
 		if debug {
 			log.Print(err)
+		}
+		if os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
 		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -308,6 +280,7 @@ func resourcePut(meta metadata, w http.ResponseWriter, r *http.Request) {
 	urn := fmt.Sprintf("urn:%s:resource:%s", nis, meta.Chash)
 	n2l.append(meta.Chash, urlFromRemoteAndResource(&rem, meta.Chash))
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(201)
 	fmt.Fprintf(w, "%v bytes written to %v", len(bytes), urn)
 }
 
