@@ -221,6 +221,10 @@ func resourceGet(meta metadata, w http.ResponseWriter, r *http.Request) {
 	metaPathname := fmt.Sprintf("resource/%s/meta", meta.Chash)
 	blob, err := ioutil.ReadFile(metaPathname)
 	if err != nil {
+		if os.IsNotExist(err) {
+			http.NotFound(w, r)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
