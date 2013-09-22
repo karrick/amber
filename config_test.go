@@ -7,10 +7,10 @@ import (
 )
 
 type parseConfigFileCase struct {
-	name string
+	name     string
 	pathname string
 	expected configuration
-	err string
+	err      string
 }
 
 func TestParseConfigFileMissingFile(t *testing.T) {
@@ -21,23 +21,6 @@ func TestParseConfigFileMissingFile(t *testing.T) {
 	}
 	if config != nil {
 		t.Errorf("Expected: nil; Actual: %#v\n", config)
-	}
-}
-
-func TestParseConfigFileErrors(t *testing.T) {
-	cases := []parseConfigFileCase{
-		// {
-		// 	name: "missing value",
-		// },
-	}
-	for _, item := range cases {
-		config, err := parseConfigFile(item.pathname)
-		if err.Error() != item.err {
-			t.Errorf("Case: %v; Expected error: %v; Actual error: %#v\n", item.name, item.err, err.Error())
-		}
-		if config != nil {
-			t.Errorf("Case: %v; Expected: nil; Actual: %#v\n", item.name, config)
-		}
 	}
 }
 
@@ -88,5 +71,3 @@ func TestParseConfigFile(t *testing.T) {
 		return
 	}
 }
-
-// can accept either \r\n, \r, or \n

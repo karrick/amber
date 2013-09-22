@@ -64,7 +64,7 @@ const (
 // are called by http server library, so making them...global
 
 var (
-	debug	bool
+	debug      bool
 	rem        remote
 	ErrNoRepos = errors.New("no repository found")
 )
