@@ -20,7 +20,7 @@ func parseConfigFile(pathname string) (conf configuration, err error) {
 	conf = make(map[string]map[string]string)
 	section := "General"
 	sectionRe := regexp.MustCompile("^\\[([^\\]]+)\\]$")
-	keyValRe  := regexp.MustCompile("^([^=]+)=(.+)$")
+	keyValRe  := regexp.MustCompile("^([^=]+)\\s*=\\s*(.+)$")
 	for {
 		var line string
 		line, err = buf.ReadString('\n')
