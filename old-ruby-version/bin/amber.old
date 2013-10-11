@@ -1,0 +1,369 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rubygems'
+require 'yajl'
+require 'Shex'
+
+DOTDIR = '.amber'
+
+$encryption = :aes
+
+########################################
+# initialization
+########################################
+
+def repository_root
+  here = Dir.pwd
+  while ! File.directory?(File.join(here, DOTDIR))
+    there = File.expand_path(File.join(here, '..'))
+    if here == there
+      raise "cannot find " + DOTDIR + " directory"
+    else
+      here = there
+    end
+  end
+  here
+end
+
+def amber_ignores(repos_root)
+  if $amber_ignores.nil?
+    $amber_ignores = []
+    ignores_pathname = File.join(repos_root, '.amber-ignore')
+    if File.file?(ignores_pathname)
+      $amber_ignores = File.read(ignores_pathname).split($/)
+    end
+  end
+  $amber_ignores
+end
+
+########################################
+# file-management
+########################################
+
+def address_to_pathname(hash)
+  path = if true
+           [hash.slice(0,2), hash.slice(2, hash.length-2)]
+         else
+           hash.split(//).each_slice(3).collect {|x| x.to_s}
+         end
+  File.join([DOTDIR, 'archive', path].flatten)
+end
+
+def create_directory_and_install_file(src, dest, options={})
+  FileUtils.mkdir_p(File.dirname(dest))
+  FileUtils.install(src, dest, options)
+end
+
+def with_temp_file_contents(contents, &block)
+  raise(ArgumentError, 'method requires block') unless block_given?
+
+  Shex.with_temp do |temp|
+    File.open(temp, 'wb') { |io| io.write(contents) }
+    yield(temp)
+  end
+end
+
+########################################
+# encryption
+########################################
+
+def file_hash(filename)
+  Shex.shex!("openssl dgst -sha1 #{Shex.shell_quote(filename)}")[:stdout].split('= ')[1].chomp
+end
+
+# not sure if I'll need this...
+def ensure_file_hash_correct(filename, hash)
+  if file_hash(filename) != hash
+    raise "decrypted file does not match stored hash: #{filename}"
+  end
+end
+
+def encrypt_file(decrypted_pathname, encrypted_pathname, key)
+  case $encryption
+  when :aes
+    encrypt_file_aes(decrypted_pathname, encrypted_pathname, key)
+  when :ccrypt
+    encrypt_file_ccrypt(decrypted_pathname, encrypted_pathname, key)
+  else
+    encrypt_file_null(decrypted_pathname, encrypted_pathname, key)
+  end
+end
+
+def decrypt_file(encrypted_pathname, decrypted_pathname, key)
+  case $encryption
+  when :aes
+    decrypt_file_aes(encrypted_pathname, decrypted_pathname, key)
+  when :ccrypt
+    decrypt_file_ccrypt(encrypted_pathname, decrypted_pathname, key)
+  else
+    decrypt_file_null(encrypted_pathname, decrypted_pathname, key)
+  end
+end
+
+########################################
+
+def encrypt_file_null(decrypted_pathname, encrypted_pathname, key)
+  create_directory_and_install_file(decrypted_pathname, encrypted_pathname)
+end
+
+def decrypt_file_null(encrypted_pathname, decrypted_pathname, key)
+  create_directory_and_install_file(encrypted_pathname, decrypted_pathname)
+end
+
+########################################
+# aes-{encrypt,decrypt} simpler invocation, and same plain text file
+# will always encrypt to the same encrypted file, allowing for space
+# saving when multiple copies of a file exists in the corpus.  This is
+# not dangerous, because each listing identifies what files a
+# particular user has, and each listing is encrypted with the user's
+# own symmetric key.
+
+def encrypt_file_aes(decrypted_pathname, encrypted_pathname, key)
+  with_temp_file_contents(key) do |keyfile|
+    Shex.with_temp do |encrypted_temp|
+      Shex.shex!("aes-encrypt < #{Shex.shell_quote(decrypted_pathname)} #{keyfile} > #{encrypted_temp}")
+      create_directory_and_install_file(encrypted_temp, encrypted_pathname)
+    end
+  end
+end
+
+def decrypt_file_aes(encrypted_pathname, decrypted_pathname, key)
+  with_temp_file_contents(key) do |keyfile|
+    Shex.with_temp do |decrypted_temp|
+      Shex.shex!("aes-decrypt < #{Shex.shell_quote(encrypted_pathname)} #{keyfile} > #{decrypted_temp}")
+      create_directory_and_install_file(decrypted_temp, decrypted_pathname)
+    end
+  end
+end
+
+########################################
+# ccrypt
+
+# From man (3)ccrypt:
+#       The encryption algorithm used by ccrypt uses a random seed which is different each time. As a  result,  encrypting  the  same
+#       file  twice  will  never yield the same result. The advantage of this method is that similarities in plaintext do not lead to
+#       similarities in ciphertext; there is no way of telling whether the content of two encrypted files is similar or not.
+
+def encrypt_file_ccrypt(decrypted_pathname, encrypted_pathname, key)
+  Shex.with_temp do |decrypted_temp|
+    FileUtils.cp(decrypted_pathname, decrypted_temp)
+    Shex.shex!("ccrypt -qfek - #{decrypted_temp}", :stdin => key)
+    create_directory_and_install_file(decrypted_temp + ".cpt", encrypted_pathname)
+  end
+end
+
+def decrypt_file_ccrypt(encrypted_pathname, decrypted_pathname, key)
+  Shex.with_temp do |decrypted_temp|
+    begin
+      encrypted_temp = decrypted_temp + ".cpt"
+      FileUtils.cp(encrypted_pathname, encrypted_temp)
+      Shex.shex!("ccrypt -qfdk - #{encrypted_temp}", :stdin => key)
+      create_directory_and_install_file(decrypted_temp, decrypted_pathname)
+    ensure
+      FileUtils.rm(encrypted_temp) if File.file?(encrypted_temp)
+    end
+  end
+end
+
+########################################
+# archive
+########################################
+
+def encrypt_file_with_hash(source, destination)
+  key = file_hash(source)
+  encrypt_file(source, destination, key)
+  {
+    'type' => 'file',
+    'name' => File.basename(source),
+    'mode' => File.stat(source).mode,
+    'key'  => key,
+  }
+end
+
+def store_file_in_archive(filename)
+  address = file_hash(filename)
+  create_directory_and_install_file(filename, address_to_pathname(address))
+  {'address' => address}
+end
+
+def verify_hash_of_file_in_archive(address)
+  # Used after file transfer, e.g.:
+  # def get_archive_file_from_server(location)
+  #   while File.file?(location) && verify_hash_of_file_in_archive(location)
+  #     # get it
+  #   end
+  # end
+  file_hash(address_to_pathname(address)) == address
+end
+
+def encrypt_and_archive_file(filename)
+  Shex.with_temp do |temp|
+    encrypt_file_with_hash(filename, temp).merge(store_file_in_archive(temp))
+  end
+end
+
+def encrypt_and_archive_symlink(filename)
+  {
+    'type' => 'symlink',
+    'name' => File.basename(filename),
+    'mode' => File.lstat(filename).mode,
+    'referent' => File.readlink(filename),
+  }
+end
+
+def directory_children(dirname)
+  ignores = amber_ignores(repository_root)
+  contents = Dir.glob(File.join(dirname,'*')) + Dir.glob(File.join(dirname,'.*'))
+  contents.delete_if {|x| File.basename(x) == '.' || File.basename(x) == '..'}
+  contents.delete_if {|pathname| ignores.find {|x| File.fnmatch?("**/#{x}", pathname, File::FNM_DOTMATCH)} }
+end
+
+def encrypt_and_archive_directory(dirname)
+  children = directory_children(dirname)
+  children.map! {|x| encrypt_and_archive(x) }
+  with_temp_file_contents(Yajl::Encoder.encode(children)) do |temp|
+    encrypt_and_archive(temp).merge('type' => 'directory',
+                                    'name' => File.basename(dirname),
+                                    'mode' => File.stat(dirname).mode)
+  end
+end
+
+def encrypt_and_archive(pathname)
+  if File.symlink?(pathname)
+    encrypt_and_archive_symlink(pathname)
+  elsif File.directory?(pathname)
+    encrypt_and_archive_directory(pathname)
+  elsif File.file?(pathname)
+    encrypt_and_archive_file(pathname)
+  else
+    raise "skipping file system object (neither directory, file, nor symlink): #{pathname}"
+  end
+end
+
+def retrieve_from_archive(item)
+  # NOTE: expect to be in target directory when invoked...
+  case item['type']
+  when 'symlink'
+    retrieve_from_archive_symlink(item)
+  when 'directory'
+    retrieve_from_archive_directory(item)
+  when 'file'
+    retrieve_from_archive_file(item)
+  else
+    raise "unknown file system object: #{item.inspect}"
+  end
+end
+
+def retrieve_from_archive_file(item)
+  Shex.with_temp do |temp|
+    Dir.chdir(repository_root) do
+      decrypt_file(address_to_pathname(item['address']), temp, item['key'])
+    end
+    create_directory_and_install_file(temp, item['name'])
+    FileUtils.chmod(item['mode'], item['name'])
+  end
+end
+
+def retrieve_from_archive_symlink(item)
+  File.symlink(item['referent'], item['name'])
+  FileUtils.chmod(item['mode'], item['name'])
+end
+
+def read_directory_contents_from_archive(item)
+  Shex.with_temp do |temp|
+    Dir.chdir(repository_root) do
+      decrypt_file(address_to_pathname(item['address']), temp, item['key'])
+      File.open(temp) {|io| Yajl::Parser.parse(io) }
+    end
+  end
+end
+
+def retrieve_from_archive_directory(item)
+  FileUtils.mkdir(item['name'])
+  FileUtils.chmod(item['mode'], item['name'])
+
+  Dir.chdir(item['name']) do
+    read_directory_contents_from_archive(item).each do |child|
+      retrieve_from_archive(child)
+    end    
+  end
+end
+
+def with_found_item(pathname, item, &block)
+  raise(ArgumentError, 'method requires block') unless block_given?
+
+  with_found_item_in_hierarchy(pathname, item, 
+                               pathname.split(File::SEPARATOR),
+                               &block)
+end
+
+def with_found_item_in_hierarchy(pathname, item, components, &block)
+  raise(ArgumentError, 'method requires block') unless block_given?
+
+  first_component = components.shift
+  if item['name'] == first_component
+    if components.size.zero?
+      return yield(item)
+    elsif item['type'] == 'directory'
+      contents = read_directory_contents_from_archive(item)
+      child = contents.find {|x| x['name'] == components.first}
+      if child
+        return with_found_item_in_hierarchy(pathname, child, components, &block)
+      end
+    end
+  end
+  raise "could not find #{pathname}"
+end
+
+# TODO: look into rcov for testing coverage
+
+########################################
+# untested
+########################################
+
+def main(args)
+  account = ENV['LOGNAME']
+
+  $debug = false
+  $validate = false
+  comment = nil
+  OptionParser.new do |opts|
+    opts.banner = "Usage: #{File.basename($0)} [options]"
+    opts.on("-d","--debug","Debug mode: be more verbose") {$debug = true}
+    opts.on("-v","--validate","Validate encrypted and decrypted contents (slower)") {$validate = true}
+    opts.on("-m COMMENT","--comment","Describe archive with comment") {|x| comment = x}
+    opts.on_tail("-h","--help","Show this message") do
+      puts opts
+      exit 2
+    end
+  end.parse!(args)
+
+  $repos_root = repository_root
+
+  # ??? I'm not sure I want to change the directory.  Why not just
+  # find the starting directory and use it
+  Dir.chdir(repository_root) do
+    account_filename = File.join($repos_root, DOTDIR, 'accounts', account)
+    listing = retrieve_account_file(account_filename, account)
+
+    action = args.shift
+    args.unshift('.') if args.empty?
+    case action
+    when 'info'
+      info(listing)
+    when 'archive'
+      write_listing(account_filename, account, archive(listing, comment, args.first))
+    when 'retrieve'
+      puts retrieve_something(listing, args.first)
+    else
+      raise "unknown subcommand: #{action}"
+    end
+  end
+end
+
+########################################
+
+if __FILE__ == $0
+  main(ARGV)
+end
