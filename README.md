@@ -1,3 +1,5 @@
+Secure Messaging and Backup
+
 * blob
 * tree
 ** maybe do not need to store full urn of children, but just ehash
@@ -78,4 +80,3 @@
 // X-Amber-Encryption: aes256
 // X-Amber-Hash: sha1
 // X-Amber-Mode: 644
-
