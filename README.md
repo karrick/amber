@@ -1,3 +1,29 @@
+* blob
+* tree
+** maybe do not need to store full urn of children, but just ehash
+* commit
+* refs points to commit, not object in DAG
+** maybe this has urn associated with it
+* HEAD is special ref that points to actual ref, also not object in DAG
+* tag points to commit, is object in DAG, and has message and GPG signature
+
+# compression of contents
+## could be dynamic, as decided upon the client and decompressed when unpacking it.
+## whatever parent object a blob has would determine the compression used.
+## already compressed object would be stored as is, and the compression scheme marked none.
+
+# similar thing for determining the encryption algorithm. the parent object would know:
+
+# In other words, the parent object merely described how to reify the child object.
+
+* ehash to locate and check downloaded bytes
+* encryption method
+* phash to decrypt and check decrypted & decompressed bytes
+* compression method
+* object class, type (file, directory, symlink)
+* reified name
+* mode
+
 ////////////////////////////////////////
 // <uri> ::= <urn> | <url>
 //

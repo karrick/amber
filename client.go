@@ -67,9 +67,11 @@ func repositoryRoot(rootName string) (repos string, err error) {
 
 // TODO: revise this struct; do I need all metadata?
 type commit struct {
-	name   string // some urn?
-	meta   metadata
-	parent *commit
+	name    string // some urn?
+	message string // body of commit object
+	meta    metadata
+
+	parent  *commit
 	// when merging, a commit has two parents, primary is parent,
 	// while secondary is merge
 	merge *commit

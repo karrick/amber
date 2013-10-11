@@ -32,7 +32,7 @@ type remote struct {
 // metadata for a resource stored in amber
 
 type metadata struct {
-	Type     string     // "file" | "directory" | "symlink"
+	Type     string     // "file" | "directory" | "symlink" | "commit" ?
 	Mode     string     // file mode
 	Name     string     // file system name
 	Chash    string     // hash of cipher text (name of resource)
